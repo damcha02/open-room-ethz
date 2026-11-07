@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#10252f" />
+  <meta name="description" content="Find published reservation gaps in ETH Zürich classrooms, quickly." />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>Open Room — ETH timetable finder</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brandmark" aria-hidden="true"><span class="brand-door"></span></div>
+      <div class="brand-copy"><div class="brand-name">open<span>room</span><span class="brand-dot">.</span></div><div class="brand-sub">ETH CAMPUS ROOM FINDER</div></div>
+      <button class="icon-button settings-button" id="settings-btn" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.6 1.2-1.5 2.6-2-.8a8 8 0 0 1-2.3 1.3l-.4 2.1h-3l-.4-2.1a8 8 0 0 1-2.3-1.3l-2 .8-1.5-2.6 1.7-1.3a8 8 0 0 1 0-2.7L5.8 11l1.5-2.6 2 .8a8 8 0 0 1 2.3-1.3l.4-2.1h3l.4 2.1a8 8 0 0 1 2.3 1.3l2-.8 1.5 2.6-1.7 1.3a8 8 0 0 1-.1 2.7Z" transform="translate(-1 -1)"/></svg></button>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div class="eyebrow"><span class="pulse-dot"></span> ROOM RESERVATION OVERVIEW</div>
+        <h1>Find your<br/><span>next space.</span></h1>
+        <p>See when ETH classrooms are unreserved. No occupancy tracking, no login.</p>
+      </section>
+
+      <nav class="campus-tabs" aria-label="Choose campus">
+        <button type="button" class="campus-tab selected" data-campus="Zentrum"><span class="tab-title">Zentrum</span><span class="tab-sub">Main campus</span></button>
+        <button type="button" class="campus-tab" data-campus="Hönggerberg"><span class="tab-title">Hönggerberg</span><span class="tab-sub">Science City</span></button>
+        <button type="button" class="campus-tab" data-campus="Favorites"><span class="tab-title"><span class="small-star" aria-hidden="true">★</span> Favorites</span><span class="tab-sub" id="favorites-sub">Your saved rooms</span></button>
+      </nav>
+
+      <section class="controls-panel" aria-label="Timetable controls">
+        <div class="date-header"><div><div class="section-overline">BROWSE RESERVATIONS</div><h2 id="week-label">This week</h2></div><div class="date-actions"><button id="today-btn" class="small-button" type="button">Today</button><button id="prev-week" class="nav-arrow" type="button" aria-label="Previous week">‹</button><button id="next-week" class="nav-arrow" type="button" aria-label="Next week">›</button></div></div>
+        <div class="day-strip" id="day-strip" role="group" aria-label="Select day"></div>
+        <div class="search-row"><label class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10.7" cy="10.7" r="6.2"/><path d="m15.2 15.2 5 5"/></svg><input id="room-search" type="search" placeholder="Search room or building (e.g. HG E 27)" autocomplete="off" aria-label="Search rooms" /></label><button class="refresh-btn" id="refresh-btn" type="button" title="Refresh selected rooms" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 8a7 7 0 1 0 .5 6"/><path d="M19 3v5h-5"/></svg></button></div>
+        <div class="filter-row"><label class="check-label"><input type="checkbox" id="free-only"/><span class="switch-track"></span><span>Show only free rooms</span></label><button class="add-room-link" id="add-room-btn" type="button">+ Add a room</button></div>
+      </section>
+
+      <section class="results-area" aria-live="polite" aria-busy="false"><div class="results-topline"><div><h2 id="list-heading">Buildings</h2><span class="subtle" id="list-caption">Choose a building to check its rooms</span></div><span class="time-caption" id="time-caption"></span></div><div id="room-results"></div></section>
+      <div class="bottom-note"><span class="info-dot">i</span><p><strong>Free means no published reservation.</strong> It does not guarantee the room is empty, open, or available for use. This is an independent student tool, not an official ETH service.</p></div>
+    </main>
+    <footer><span>Made for finding a quiet place to study.</span><a href="https://ethz.ch/staffnet/de/service/raeume-gebaeude/rauminfo.html" target="_blank" rel="noopener noreferrer">ETH Rauminfo ↗</a></footer>
+  </div>
+
+  <dialog id="settings-dialog" class="modal"><form method="dialog" class="modal-content"><div class="modal-title-row"><h2>Settings</h2><button class="modal-close" value="close" aria-label="Close">×</button></div><p>Preferences are saved on this device.</p><label class="form-line"><span>Show only free rooms by default</span><input type="checkbox" id="settings-free-only" /></label><label class="form-line"><span>Display</span><select id="settings-clock"><option value="24">24-hour time</option><option value="12">12-hour time</option></select></label><div class="modal-info"><strong>Data source</strong><p>Publicly displayed ETH room allocations, fetched via a read-only proxy. The catalog includes a curated selection of rooms; it is not exhaustive.</p><p>Unpublished reservations, restrictions, outages, and room closures may not be represented.</p></div><button class="primary-button" value="close">Done</button></form></dialog>
+
+  <dialog id="add-room-dialog" class="modal"><form id="add-room-form" class="modal-content"><div class="modal-title-row"><h2>Add a room</h2><button type="button" class="modal-close" id="close-add-room" aria-label="Close">×</button></div><p>Enter an ETH room code exactly as in Rauminfo.</p><label class="field-label" for="custom-room-code">Room code</label><input class="form-input" id="custom-room-code" placeholder="e.g. ML E 13" required maxlength="30" autocapitalize="characters" /><label class="field-label" for="custom-room-campus">Campus</label><select class="form-input" id="custom-room-campus"><option value="Zentrum">Zentrum</option><option value="Hönggerberg">Hönggerberg</option></select><div class="field-error" id="add-room-error" aria-live="polite"></div><button type="submit" class="primary-button">Add room</button></form></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

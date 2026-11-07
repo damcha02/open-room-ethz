@@ -1,0 +1,647 @@
+[
+  {
+    "code": "HG D 1.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 1.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 3.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 3.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 3.3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 5.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 5.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 5.3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 7.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 7.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG D 16.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 1.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 1.2",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 7",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 21",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 22",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 23",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 27",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 33.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 33.3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 33.5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG E 41",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 7",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 26.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 26.3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG F 26.5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG G 3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG G 5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG G 26.1",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG G 26.3",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "HG G 26.5",
+    "campus": "Zentrum",
+    "building": "HG"
+  },
+  {
+    "code": "CHN C 14",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN D 29",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN D 42",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN D 44",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN D 46",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN D 48",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN E 42",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN E 46",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN F 42",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN F 46",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN G 42",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CHN G 46",
+    "campus": "Zentrum",
+    "building": "CHN"
+  },
+  {
+    "code": "CAB G 11",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 51",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 52",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 56",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 57",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 59",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "CAB G 61",
+    "campus": "Zentrum",
+    "building": "CAB"
+  },
+  {
+    "code": "ETA F 5",
+    "campus": "Zentrum",
+    "building": "ETA"
+  },
+  {
+    "code": "ETF C 1",
+    "campus": "Zentrum",
+    "building": "ETF"
+  },
+  {
+    "code": "ETF E 1",
+    "campus": "Zentrum",
+    "building": "ETF"
+  },
+  {
+    "code": "ETZ E 6",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ E 7",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ E 8",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ E 9",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ F 91",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ G 91",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ H 91",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ J 91",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "ETZ K 91",
+    "campus": "Zentrum",
+    "building": "ETZ"
+  },
+  {
+    "code": "GLC E 38.1",
+    "campus": "Zentrum",
+    "building": "GLC"
+  },
+  {
+    "code": "GLC E 38.2",
+    "campus": "Zentrum",
+    "building": "GLC"
+  },
+  {
+    "code": "LEE E 101",
+    "campus": "Zentrum",
+    "building": "LEE"
+  },
+  {
+    "code": "HCI D 2",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI D 4",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI D 6",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI D 8",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI E 2",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI E 8",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI F 2",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI F 8",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI G 3",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI G 7",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI H 2.1",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI H 8.1",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI J 3",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI J 4",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI J 6",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI J 7",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HCI J 8",
+    "campus": "Hönggerberg",
+    "building": "HCI"
+  },
+  {
+    "code": "HIL B 21",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL C 10.2",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL D 10.2",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL D 60.1",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 1",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 3",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 4",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 5",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 6",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 7",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 8",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 9",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL E 10.1",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIL F 10.3",
+    "campus": "Hönggerberg",
+    "building": "HIL"
+  },
+  {
+    "code": "HIT E 51",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 11.1",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 12",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 13",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 31.1",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 31.2",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT F 32",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT H 42",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT H 51",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT J 51",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT J 52",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT J 53",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT K 51",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HIT K 52",
+    "campus": "Hönggerberg",
+    "building": "HIT"
+  },
+  {
+    "code": "HPH G 1",
+    "campus": "Hönggerberg",
+    "building": "HPH"
+  },
+  {
+    "code": "HPH G 2",
+    "campus": "Hönggerberg",
+    "building": "HPH"
+  },
+  {
+    "code": "HPH G 3",
+    "campus": "Hönggerberg",
+    "building": "HPH"
+  },
+  {
+    "code": "HPV G 4",
+    "campus": "Hönggerberg",
+    "building": "HPV"
+  },
+  {
+    "code": "HPV G 5",
+    "campus": "Hönggerberg",
+    "building": "HPV"
+  },
+  {
+    "code": "HCP E 47.1",
+    "campus": "Hönggerberg",
+    "building": "HCP"
+  },
+  {
+    "code": "HCP E 47.2",
+    "campus": "Hönggerberg",
+    "building": "HCP"
+  },
+  {
+    "code": "HCP E 47.3",
+    "campus": "Hönggerberg",
+    "building": "HCP"
+  },
+  {
+    "code": "HCP E 47.4",
+    "campus": "Hönggerberg",
+    "building": "HCP"
+  },
+  {
+    "code": "HPK D 3",
+    "campus": "Hönggerberg",
+    "building": "HPK"
+  },
+  {
+    "code": "HPK D 24.2",
+    "campus": "Hönggerberg",
+    "building": "HPK"
+  },
+  {
+    "code": "HPL D 32",
+    "campus": "Hönggerberg",
+    "building": "HPL"
+  },
+  {
+    "code": "HPL D 34",
+    "campus": "Hönggerberg",
+    "building": "HPL"
+  },
+  {
+    "code": "HPT C 103",
+    "campus": "Hönggerberg",
+    "building": "HPT"
+  }
+]
