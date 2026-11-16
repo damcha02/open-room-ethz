@@ -62,15 +62,28 @@ export function freeIntervals(entries, from=480, to=1320) {
   if (cursor < to) free.push({start:cursor,end:to});
   return free;
 }
-export function describeStatus(entries, day, today, now, format='24') {
+/** Status of one room for one day.
+ * booked  = a type-2 (teaching event) reservation   -> state "busy"
+ * blocked = any other published interval (type 8, 13, unknown ...) -> state "blocked"; semantics are unverified, so it never counts as free
+ * unknown = no usable data: an empty ETH answer for a room ETH has not confirmed exists must never be shown as free.
+ * `verified` comes from the proxy (roomVerified): only an explicit true means the room is confirmed (no default!).
+ */
+export function describeStatus(entries, day, today, now, format='24', verified) {
+  if (!Array.isArray(entries)) return {state:'unknown',text:'Schedule unavailable',free:[],blocks:[]};
+  if (entries.length===0 && verified!==true) {
+    return {state:'unknown',text:verified===false?'Room not found at ETH':'Room not verified',free:[],blocks:[],message:'ETH returned no data for this room and its existence could not be confirmed, so availability is unknown.'};
+  }
   const blocks=dayAllocations(entries,day);
   const free=freeIntervals(blocks);
+  const booked=list=>list.some(b=>b.type===2);
   if (day===today) {
     // The timeline is displayed within 08:00–22:00; do not claim free outside that interval.
     const active=blocks.filter(b=>b.start<=now && now<b.end);
     if (active.length) {
       const until=Math.max(...active.map(b=>b.end));
-      return {state:active.some(b=>b.type===8)?'blocked':'busy',text:`${active.some(b=>b.type===8)?'Blocked':'Reserved'} until ${displayTime(until,format)}`,free,blocks};
+      return booked(active)
+        ? {state:'busy',text:`Reserved until ${displayTime(until,format)}`,free,blocks}
+        : {state:'blocked',text:`Blocked until ${displayTime(until,format)}`,free,blocks};
     }
     if(now<480 || now>=1320) return {state:'unknown',text:'Outside 08–22 view',free,blocks};
     const next=blocks.find(b=>b.start>now);
@@ -78,5 +91,22 @@ export function describeStatus(entries, day, today, now, format='24') {
   }
   return free.length
     ? {state:'free',text:blocks.length?'Free periods available':'No bookings listed',free,blocks}
-    : {state:'busy',text:'Booked / blocked all day',free,blocks};
+    : booked(blocks)
+      ? {state:'busy',text:'Booked all day',free,blocks}
+      : {state:'blocked',text:'Blocked all day',free,blocks};
+}
+
+export const FRESH_MS = 600_000;       // data younger than this is not refetched
+export const MAX_STALE_MS = 3_600_000; // older data is discarded; in between it is shown while being refreshed
+
+/** Status from a cache record: undefined -> loading, {state:'error'} -> unknown, {state:'ready'} -> describeStatus. */
+export function statusFromRecord(record, {day, today, now, format='24', nowMs=Date.now()}) {
+  if (!record) return {state:'loading',text:'Checking…',blocks:[],free:[]};
+  if (record.state==='error') {
+    return {state:'unknown',text:record.rateLimited?'Rate limited — retrying later':'Schedule unavailable',message:record.message,blocks:[],free:[]};
+  }
+  if (record.state!=='ready' || !Array.isArray(record.allocations)) return {state:'unknown',text:'Schedule unavailable',blocks:[],free:[]};
+  const age=nowMs-record.cachedAt;
+  if (!(age>=0) || age>=MAX_STALE_MS) return {state:'loading',text:'Checking…',blocks:[],free:[]};
+  return {...describeStatus(record.allocations,day,today,now,format,record.roomVerified),fetchedAt:record.fetchedAt,stale:age>=FRESH_MS};
 }

@@ -1,4 +1,4 @@
-import {zurichParts,shiftDate,weekStart,dayAllocations,freeIntervals,displayTime,describeStatus} from './schedule.mjs';
+import {zurichParts,shiftDate,weekStart,dayAllocations,freeIntervals,displayTime,describeStatus,statusFromRecord,FRESH_MS,MAX_STALE_MS} from './schedule.mjs';
 
 const $=id=>document.getElementById(id);
 const STORAGE_KEY='openroom-prefs-v1';
@@ -21,14 +21,23 @@ const state={
 };
 const fetchQueue=[];
 let running=0;
-const MAX_SIMULTANEOUS=3;
+const MAX_SIMULTANEOUS=2;
+const CACHE_KEY='openroom-cache-v1';
+let pausedUntil=0,resumeTimer=null,retryTimer=null,retryTimerAt=0,persistTimer=null;
 function store() {localStorage.setItem(STORAGE_KEY,JSON.stringify({freeOnly:state.freeOnly,favorites:[...state.favorites],extraRooms:state.extraRooms,timeFormat:state.timeFormat}));}
 function html(s) {return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escapeAttr(s){return html(s);}
 function enqueue(work) {return new Promise((resolve,reject)=>{fetchQueue.push({work,resolve,reject});flushQueue();});}
-function flushQueue() {while(running<MAX_SIMULTANEOUS && fetchQueue.length){const task=fetchQueue.shift();running++;Promise.resolve().then(task.work).then(task.resolve,task.reject).finally(()=>{running--;flushQueue();});}}
+function flushQueue() {if(Date.now()<pausedUntil)return;while(running<MAX_SIMULTANEOUS && fetchQueue.length){const task=fetchQueue.shift();running++;Promise.resolve().then(task.work).then(task.resolve,task.reject).finally(()=>{running--;flushQueue();});}}
+// After a rate-limit answer nothing new is sent until the cooldown has passed; queued work simply waits.
+function pauseQueue(ms){pausedUntil=Math.max(pausedUntil,Date.now()+ms);clearTimeout(resumeTimer);resumeTimer=setTimeout(()=>{flushQueue();loadCurrentVisible();},pausedUntil-Date.now()+50);}
+function scheduleRetry(ms){const at=Date.now()+ms+100;if(retryTimer&&retryTimerAt<=at)return;clearTimeout(retryTimer);retryTimerAt=at;retryTimer=setTimeout(()=>{retryTimer=null;retryTimerAt=0;loadCurrentVisible();},at-Date.now());}
+function loadPersistedCache(){try{const raw=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');if(raw.v!==1||!Array.isArray(raw.entries))return;for(const [k,r] of raw.entries){const age=Date.now()-(r&&r.cachedAt);if(r&&r.state==='ready'&&Array.isArray(r.allocations)&&age>=0&&age<MAX_STALE_MS)state.cache.set(k,r);}}catch{}}
+function persistCache(){clearTimeout(persistTimer);persistTimer=setTimeout(()=>{try{const entries=[...state.cache].filter(([,r])=>r.state==='ready').sort((a,b)=>b[1].cachedAt-a[1].cachedAt).slice(0,100);localStorage.setItem(CACHE_KEY,JSON.stringify({v:1,entries}));}catch{}},500);}
 function cacheKey(room,day=state.day){return `${room}|${weekStart(day)}`;}
-function isFresh(record){return record && record.state==='ready' && Date.now()-record.cachedAt < 300_000;}
+function isFresh(record){return record && record.state==='ready' && Date.now()-record.cachedAt < FRESH_MS;}
+// A room needs a request if it has no data, stale data, or an error whose backoff has expired.
+function needsLoad(record){const now=Date.now();if(!record)return true;if(record.state==='error')return now>=(record.retryAt||0);return !isFresh(record)&&now>=(record.retryAt||0);}
 function allRooms(){const map=new Map(state.rooms.map(r=>[r.code,r]));for(const r of state.extraRooms){if(r?.code && r?.building && r?.campus && !map.has(r.code))map.set(r.code,r);}return [...map.values()].sort((a,b)=>a.building.localeCompare(b.building)||a.code.localeCompare(b.code,undefined,{numeric:true}));}
 function weekBounds(day){const first=weekStart(day);return [first,shiftDate(first,6)];}
 async function ensureSchedule(code,day=state.day,force=false){
@@ -40,21 +49,33 @@ async function ensureSchedule(code,day=state.day,force=false){
     try{
       const params=new URLSearchParams({room:code,from,to});
       const response=await fetch(`/api/allocations?${params}`,{headers:{Accept:'application/json'},cache:'default'});
-      const json=await response.json();
-      if(!response.ok)throw new Error(json.error||`API HTTP ${response.status}`);
-      if(!Array.isArray(json.allocations))throw new Error('Unexpected API response');
-      const data={state:'ready',allocations:json.allocations,fetchedAt:json.fetchedAt,cachedAt:Date.now()};
+      let json=null;try{json=await response.json();}catch{}
+      if(!response.ok){const err=new Error((json&&json.error)||`API HTTP ${response.status}`);err.status=response.status;err.retryAfter=Number(response.headers.get('Retry-After'))||Number(json&&json.retryAfter)||0;throw err;}
+      if(!json||!Array.isArray(json.allocations))throw new Error('Unexpected API response');
+      const data={state:'ready',allocations:json.allocations,roomVerified:json.roomVerified===true?true:json.roomVerified===false?false:null,fetchedAt:json.fetchedAt,cachedAt:Date.now()};
+      state.cache.set(key,data);persistCache();return data;
+    } catch(error){
+      // Errors are never "free". 429/503 pause the whole queue; every failure backs off for at least 30 s (10 s if ETH says so).
+      const limited=error.status===429||error.status===503;
+      const wait=(limited?Math.max(error.retryAfter||60,10):30)*1000;
+      if(limited)pauseQueue(wait);
+      scheduleRetry(wait);
+      const prev=state.cache.get(key);
+      if(prev&&prev.state==='ready'&&Date.now()-prev.cachedAt<MAX_STALE_MS){prev.retryAt=Date.now()+wait;return prev;} // keep showing older cached data
+      const data={state:'error',message:error.message||'Failed to retrieve schedule',rateLimited:limited,retryAt:Date.now()+wait};
       state.cache.set(key,data);return data;
-    } catch(error){const data={state:'error',message:error.message||'Failed to retrieve schedule'};state.cache.set(key,data);return data;}
+    }
   });
   state.inflight.set(key,promise);
   promise.finally(()=>{state.inflight.delete(key);renderResults();});
   return promise;
 }
-function scheduleLoad(codes,day=state.day){for(const code of codes){const key=cacheKey(code,day);if(!isFresh(state.cache.get(key))&&!state.inflight.has(key))void ensureSchedule(code,day);}}
-function getStatus(code){const key=cacheKey(code);const record=state.cache.get(key);if(!record || (!isFresh(record) && record.state==='ready'))return {state:'loading',text:'Checking…',blocks:[],free:[]};if(record.state==='error')return {state:'unknown',text:'Schedule unavailable',message:record.message,blocks:[],free:[]};const now=zurichParts();return {...describeStatus(record.allocations,state.day,now.date,now.minute,state.timeFormat),fetchedAt:record.fetchedAt};}
+function scheduleLoad(codes,day=state.day){for(const code of codes){const key=cacheKey(code,day);if(needsLoad(state.cache.get(key))&&!state.inflight.has(key))void ensureSchedule(code,day);}}
+function getStatus(code){const now=zurichParts();return statusFromRecord(state.cache.get(cacheKey(code)),{day:state.day,today:now.date,now:now.minute,format:state.timeFormat});}
 function isVisibleRoom(r){if(state.campus==='Favorites')return state.favorites.has(r.code);return r.campus===state.campus;}
 function matchingRooms(){const search=state.search.toUpperCase().trim();return allRooms().filter(r=>isVisibleRoom(r)&&(!search||`${r.code} ${r.building}`.includes(search)));}
+// A narrow search (<=5 rooms) auto-expands its buildings; broad searches stay collapsed to avoid a burst of ETH requests.
+function searchExpands(rooms){return state.search.trim()!==''&&state.campus!=='Favorites'&&rooms.length<=5;}
 function visibleByFilter(r){if(state.campus==='Favorites'||!state.freeOnly)return true;const status=getStatus(r.code);return status.state==='free';}
 function weekdayIndex(ymd){return (new Date(`${ymd}T12:00:00Z`).getUTCDay()+6)%7;}
 function labelDay(day,options){const d=new Date(day+'T12:00:00Z');return new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',...options}).format(d);}
@@ -66,15 +87,15 @@ function renderDateStrip(){
   $('day-strip').innerHTML=Array.from({length:7},(_,idx)=>{const day=shiftDate(start,idx);const today=day===zurichParts().date;return `<button type="button" class="day-btn ${state.day===day?'selected':''} ${today?'today':''}" data-day="${day}" aria-pressed="${day===state.day}"><span class="day-name">${labelDay(day,{weekday:'short'})}</span><span class="day-number">${Number(day.slice(-2))}</span></button>`;}).join('');
   const now=zurichParts();$('time-caption').textContent=state.day===now.date?`Zurich · ${displayTime(now.minute,state.timeFormat)}`:`${labelDay(state.day,{weekday:'long',day:'numeric',month:'short'})}`;
 }
-function statusHtml(s){const classes={free:'status-free',busy:'status-busy',blocked:'status-blocked',unknown:'status-unknown',loading:'status-unknown'};return `<div class="room-status ${classes[s.state]||'status-unknown'}"><span class="status-dot"></span><span class="status-text">${html(s.text)}</span></div>`;}
+function statusHtml(s){const classes={free:'status-free',busy:'status-busy',blocked:'status-blocked',unknown:'status-unknown',loading:'status-loading'};return `<div class="room-status ${classes[s.state]||'status-unknown'}"><span class="status-dot"></span><span class="status-text">${html(s.text)}</span></div>`;}
 function roomHtml(r){const s=getStatus(r.code);const saved=state.favorites.has(r.code);const open=state.expandedRooms.has(r.code);return `<div class="room-entry"><div class="room-row"><button class="room-main" type="button" data-open-room="${escapeAttr(r.code)}" aria-expanded="${open}"><div><div class="room-code">${html(r.code)}</div><div class="room-hint">${open?'Hide timetable':'View timetable'} ${open?'↑':'→'}</div></div>${statusHtml(s)}</button><button class="favorite-btn ${saved?'saved':''}" type="button" data-favorite="${escapeAttr(r.code)}" aria-label="${saved?'Remove':'Add'} ${escapeAttr(r.code)} ${saved?'from':'to'} favorites" title="${saved?'Remove from favorites':'Add to favorites'}">${saved?'★':'☆'}</button></div>${open?detailHtml(r,s):''}</div>`;}
 function detailHtml(r,s){
   const viewFrom=480,viewTo=1320;
   let timeline='';
   let freeText='';
   let bookings='';
-  if(s.state==='unknown'||s.state==='loading'){
-    timeline=`<div class="empty-card">${s.state==='loading'?'Loading timetable…':'Could not read ETH reservations. Availability is unknown.'}${s.message?`<br><small>${html(s.message)}</small>`:''}</div>`;
+  if(s.state==='loading'||(s.state==='unknown'&&!s.blocks.length&&!s.free.length)){
+    timeline=`<div class="empty-card">${s.state==='loading'?'Loading timetable…':html(s.text)+' — availability is unknown.'}${s.message?`<br><small>${html(s.message)}</small>`:''}</div>`;
   }else{
     const colors=s.blocks.map(b=>{
       const start=Math.max(viewFrom,b.start),end=Math.min(viewTo,b.end);
@@ -83,11 +104,11 @@ function detailHtml(r,s){
     }).join('');
     timeline=`<div class="detail-small-title">Daily overview (08:00–22:00)</div><div class="timeline-wrap"><div class="timeline-bar" aria-label="Green indicates unreserved intervals, salmon indicates bookings, amber indicates block entries">${colors}</div><div class="timeline-labels"><span>08</span><span>12</span><span>16</span><span>20</span><span>22</span></div></div>`;
     freeText=`<div class="detail-small-title">Unreserved intervals</div><div class="free-windows">${s.free.length?s.free.map(i=>`${displayTime(i.start,state.timeFormat)}–${displayTime(i.end,state.timeFormat)}`).join(' · '):'None in displayed hours'}</div>`;
-    bookings=`<div class="detail-small-title">Reservations and blocks</div><div class="slot-list">${s.blocks.length?s.blocks.map(b=>`<div class="slot"><span class="slot-time">${displayTime(b.start,state.timeFormat)}–${displayTime(b.end,state.timeFormat)}</span><span class="slot-title">${html(b.title|| (b.type===8?'Blocked interval (type 8)':'Reservation / restriction'))}</span></div>`).join(''):'<span class="slot-title">No published entries for this date.</span>'}</div>`;
+    bookings=`<div class="detail-small-title">Reservations and blocks</div><div class="slot-list">${s.blocks.length?s.blocks.map(b=>`<div class="slot"><span class="slot-time">${displayTime(b.start,state.timeFormat)}–${displayTime(b.end,state.timeFormat)}</span><span class="slot-title">${html(b.title|| (b.type===8?'Blocked interval (type 8)':b.type===2?'Reservation':`Blocked interval (type ${b.type??'unknown'})`))}</span></div>`).join(''):'<span class="slot-title">No published entries for this date.</span>'}</div>`;
   }
   const [from,to]=weekBounds(state.day);
   const ethUrl=new URL('https://ethz.ch/staffnet/de/service/raeume-gebaeude/rauminfo/raumdetails/allocation.html');ethUrl.searchParams.set('room',r.code);ethUrl.searchParams.set('from',from);ethUrl.searchParams.set('to',to);
-  return `<div class="room-details">${timeline}${freeText}${bookings}<div class="room-details-bottom"><a class="source-link" href="${escapeAttr(ethUrl.toString())}" target="_blank" rel="noopener noreferrer">View official Belegungsplan ↗</a><span class="detail-caveat">Schedule ≠ occupancy</span></div></div>`;
+  return `<div class="room-details">${s.stale&&s.fetchedAt?`<div class="detail-caveat">Cached data from ${displayTime(zurichParts(new Date(s.fetchedAt)).minute,state.timeFormat)} — refreshing…</div>`:''}${timeline}${freeText}${bookings}<div class="room-details-bottom"><a class="source-link" href="${escapeAttr(ethUrl.toString())}" target="_blank" rel="noopener noreferrer">View official Belegungsplan ↗</a><span class="detail-caveat">Schedule ≠ occupancy</span></div></div>`;
 }
 function renderResults(){
   if(state.loadingCatalog){$('room-results').innerHTML='<div class="empty-card">Loading room catalog…</div>';return;}
@@ -95,21 +116,26 @@ function renderResults(){
   const rooms=matchingRooms();
   $('list-heading').textContent=state.campus==='Favorites'?'Favorite rooms':'Buildings';
   $('favorites-sub').textContent=`${state.favorites.size} saved room${state.favorites.size===1?'':'s'}`;
-  $('list-caption').textContent=state.campus==='Favorites'?'Favorites are shown regardless of the free-only filter':`${new Set(rooms.map(r=>r.building)).size} buildings · ${rooms.length} rooms in catalog`;
+  $('list-caption').textContent=state.campus==='Favorites'?'Favorites are shown regardless of the free-only filter':`${new Set(rooms.map(r=>r.building)).size} buildings · ${rooms.length} rooms in catalog${state.freeOnly?' · free-only lists only confirmed-free rooms in open buildings':''}`;
   if(!rooms.length){$('room-results').innerHTML=`<div class="empty-card"><div class="empty-symbol">${state.campus==='Favorites'?'☆':'⌕'}</div>${state.campus==='Favorites'?'No favorites yet. Use the star beside any room to save it.':'No rooms match your search.'}</div>`;return;}
+  const auto=searchExpands(rooms);
   const groups=new Map();for(const room of rooms){if(!groups.has(room.building))groups.set(room.building,[]);groups.get(room.building).push(room);}
   const content=[...groups].map(([building,list])=>{
-    const open=state.campus==='Favorites'?!state.expandedBuildings.has('!closed:'+building):state.expandedBuildings.has(building);
-    const shown=list.filter(visibleByFilter),pending=list.filter(r=>!isFresh(state.cache.get(cacheKey(r.code))) && !state.cache.has(cacheKey(r.code)));
+    const open=state.campus==='Favorites'?!state.expandedBuildings.has('!closed:'+building):(auto||state.expandedBuildings.has(building));
+    const filtering=state.freeOnly && state.campus!=='Favorites';
+    const statuses=new Map(list.map(r=>[r.code,getStatus(r.code)]));
+    const shown=list.filter(visibleByFilter);
+    const loadingN=list.filter(r=>statuses.get(r.code).state==='loading').length,unknownN=list.filter(r=>statuses.get(r.code).state==='unknown').length;
     const meta=state.campus==='Favorites'?`${list.length} favorite room${list.length>1?'s':''}`:`${list.length} room${list.length>1?'s':''}`;
-    const pill=state.freeOnly && state.campus!=='Favorites' && open?`${shown.length} free`:`${list.length} rooms`;
-    const body=shown.map(roomHtml).join('')+((state.freeOnly && state.campus!=='Favorites'&&pending.length>0)?`<div class="empty-card" style="border:0;border-top:1px solid var(--line);border-radius:0;padding:12px">Checking ${pending.length} more room${pending.length===1?'':'s'}…</div>`:'');
-    const emptyBody=state.freeOnly && !pending.length && !shown.length?'<div class="empty-card" style="border:0;border-radius:0">No rooms confirmed free in this building for the selected time.</div>':'';
+    const pill=filtering && open?`${shown.length} ${loadingN||unknownN?'confirmed free':'free'}`:`${list.length} rooms`;
+    const note=text=>`<div class="empty-card" style="border:0;border-top:1px solid var(--line);border-radius:0;padding:12px">${text}</div>`;
+    const body=shown.map(roomHtml).join('')+(filtering?(loadingN?note(`Checking ${loadingN} more room${loadingN===1?'':'s'}…`):'')+(unknownN?note(`${unknownN} room${unknownN===1?' is':'s are'} hidden because availability is unknown (schedule unavailable, room not verified, or outside 08–22). Turn off the filter to see them.`):''):'');
+    const emptyBody=filtering && !loadingN && !unknownN && !shown.length?'<div class="empty-card" style="border:0;border-radius:0">No rooms confirmed free in this building for the selected time.</div>':'';
     return `<article class="building-card ${open?'open':''}"><button type="button" class="building-head" data-building="${html(building)}" aria-expanded="${open}"><span class="building-avatar">${html(building)}</span><span><span class="building-title">${html(building)}</span><span class="building-meta" style="display:block">${meta}</span></span><span class="building-right"><span class="count-pill">${pill}</span><span class="chevron">›</span></span></button>${open?`<div class="building-rooms">${body||emptyBody}</div>`:''}</article>`;
   }).join('');
   $('room-results').innerHTML=content;
 }
-function loadCurrentVisible(){if(state.loadingCatalog)return;const grouped=matchingRooms();const openCodes=grouped.filter(r=>state.campus==='Favorites'||state.expandedBuildings.has(r.building)).map(r=>r.code);scheduleLoad(openCodes);}
+function loadCurrentVisible(){if(state.loadingCatalog)return;const grouped=matchingRooms();const openCodes=grouped.filter(r=>state.campus==='Favorites'||searchExpands(grouped)||state.expandedBuildings.has(r.building)).map(r=>r.code);scheduleLoad(openCodes);}
 function switchCampus(next){state.campus=next;document.querySelectorAll('.campus-tab').forEach(b=>{b.classList.toggle('selected',b.dataset.campus===next);b.setAttribute('aria-pressed',String(b.dataset.campus===next));});renderResults();loadCurrentVisible();}
 
 $('day-strip').addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(b)setDay(b.dataset.day);});
@@ -144,7 +170,7 @@ $('add-room-form').addEventListener('submit',e=>{
   const room={code,building:code.split(' ')[0],campus:$('custom-room-campus').value};state.extraRooms.push(room);state.expandedBuildings.add(room.building);store();$('add-room-dialog').close();state.search='';$('room-search').value='';switchCampus(room.campus);
 });
 
-async function start(){renderDateStrip();renderResults();try{const response=await fetch('/rooms.json');if(!response.ok)throw Error('Cannot load catalog');const list=await response.json();if(!Array.isArray(list))throw Error('Invalid catalog');state.rooms=list;state.loadingCatalog=false;renderResults();}catch{state.loadingCatalog=false;state.catalogError=true;renderResults();}}
+async function start(){loadPersistedCache();renderDateStrip();renderResults();try{const response=await fetch('/rooms.json');if(!response.ok)throw Error('Cannot load catalog');const list=await response.json();if(!Array.isArray(list))throw Error('Invalid catalog');state.rooms=list;state.loadingCatalog=false;renderResults();}catch{state.loadingCatalog=false;state.catalogError=true;renderResults();}}
 start();
 setInterval(()=>{const {date}=zurichParts();if(date!==state.day && state.day===shiftDate(date,-1))setDay(date);else{renderDateStrip();renderResults();loadCurrentVisible();}},60000);
 if('serviceWorker' in navigator && window.isSecureContext){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
