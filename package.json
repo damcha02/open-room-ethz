@@ -1,16 +1,27 @@
 {
-  "name": "eth-room-finder",
+  "name": "open-room-ethz",
   "private": true,
-  "version": "0.1.0",
-  "description": "ETH room reservation timetable PWA",
+  "version": "1.0.0",
+  "description": "Open Room ETHZ: find free ETH Zürich rooms from ETH's published reservation data (unofficial student project)",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   },
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
+    "dev:worker": "wrangler dev",
     "test": "node --test",
-    "test:e2e": "node e2e/run.mjs"
+    "test:e2e": "node e2e/run.mjs",
+    "test:worker": "node worker-tests/run.mjs",
+    "icons": "scripts/build-icons.sh",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.163.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damcha02/open-room-ethz.git"
   }
 }

@@ -1,0 +1,33 @@
+{
+  // Open Room ETHZ — Cloudflare Workers Free. No secrets are needed or stored here.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "open-room-ethz",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-17",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+
+  // Static files are served by Workers Static Assets (free and unlimited) WITHOUT running the Worker.
+  // Only /api/* runs the Worker. A path that matches neither a file nor /api/* reaches the Worker, which hands it to ASSETS (404 page).
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page"
+  },
+
+  // One global, SQLite-backed Durable Object: shared cache, de-duplication, request spacing, cooldown and the daily ETH budget.
+  "durable_objects": { "bindings": [{ "name": "ETH_GATEWAY", "class_name": "EthGateway" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EthGateway"] }],
+
+  // Safety ceilings, not targets. All are plain strings (Worker vars).
+  "vars": {
+    "ETH_DAILY_BUDGET": "200",
+    "ETH_CACHE_TTL_MS": "300000",
+    "ETH_MIN_INTERVAL_MS": "1000",
+    "ETH_MAX_QUEUE_WAIT_MS": "8000",
+    "ETH_DEFAULT_COOLDOWN_MS": "60000",
+    "ETH_MAX_STALE_MS": "3600000"
+  }
+}

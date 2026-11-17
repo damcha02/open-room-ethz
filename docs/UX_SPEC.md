@@ -1,6 +1,6 @@
-# Open Room — UX specification (Stage 3A / 3A.1: Smart Discovery)
+# Open Room ETHZ — UX specification
 
-Open Room is a recommendation-first mobile app. It suggests ETH Zürich rooms that have **no published reservation**,
+Open Room ETHZ is a recommendation-first mobile app (an unofficial student project, not affiliated with ETH Zürich). It suggests ETH Zürich rooms that have **no published reservation**,
 based on ETH's Rauminfo schedules. It reports reservations, **never physical occupancy**. A room can be free and
 still be locked, in use or unsuitable.
 
@@ -8,7 +8,7 @@ still be locked, in use or unsuitable.
 
 ## 1. Home screen hierarchy (mobile, ~375 px)
 
-1. **Header** — Open Room, search icon (jumps to and focuses the search field in *Browse buildings*), settings icon.
+1. **Header** — Open Room ETHZ, search icon (jumps to and focuses the search field in *Browse buildings*), settings icon.
 2. **Campus selector** — Zentrum / Hönggerberg. Remembered locally.
 3. **Favorites** — compact rows, shown whenever at least one favorite exists. Contains favorites from **both** campuses and is
    never affected by the campus selector, the recommendation mode or the free-only filter.

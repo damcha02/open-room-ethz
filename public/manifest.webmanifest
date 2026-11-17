@@ -1,15 +1,20 @@
 {
   "id": "/",
-  "name": "Open Room — ETH timetable finder",
+  "name": "Open Room ETHZ",
   "short_name": "Open Room",
-  "description": "View published ETH room reservation timetables.",
+  "description": "Find free ETH Zürich rooms from ETH's published reservation data. Unofficial student project.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f6f8f7",
   "theme_color": "#10252f",
+  "categories": ["education", "utilities"],
   "icons": [
-    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
-    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }

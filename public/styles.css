@@ -207,3 +207,9 @@ body.rd-open{overflow:hidden}
 .rd-days{display:none}
 .tl-free{overflow:clip}
 .tl-label{position:sticky;top:6px;display:inline-block}
+
+/* ===== Production: Open Room ETHZ branding ===== */
+.brand-name{font-size:19px;font-weight:800;letter-spacing:-.6px;white-space:nowrap}
+.brand-ethz{color:#4f7f2c;font-weight:800;letter-spacing:.5px}
+@media(max-width:340px){.brand-name{font-size:17px}.topbar{gap:8px}}
+.brand-name>span:first-child{font-weight:800}

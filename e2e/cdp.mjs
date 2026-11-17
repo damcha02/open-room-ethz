@@ -61,6 +61,9 @@ async function launchOnce({binary, port, profile, width = 375, height = 812}) {
       const base = {key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code, text: key === 'Enter' ? '\r' : key === ' ' ? ' ' : undefined};
       await send('Input.dispatchKeyEvent', {type: 'keyDown', ...base}); await send('Input.dispatchKeyEvent', {type: 'keyUp', ...base});
     },
+    /** Chromium's own installability verdict for the current page (empty list = installable). */
+    async installabilityErrors() { return (await send('Page.getInstallabilityErrors')).result.installabilityErrors; },
+    async appManifest() { const r = (await send('Page.getAppManifest')).result; return {url: r.url, errors: r.errors, data: r.data ? JSON.parse(r.data) : null}; },
     close() { try { ws.close(); } catch {} proc.kill(); }
   };
   return api;

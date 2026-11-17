@@ -1,14 +1,22 @@
-# Proposed production architecture (design only — not implemented)
+# Production architecture (implemented)
 
-Status: **proposal**. Nothing in this document exists in the repository yet. The current Node backend (`server.mjs`,
-`api/allocations.js`, `lib/eth-client.js`) is unchanged and remains the reference implementation.
+Status: **implemented and deployed** on Cloudflare Workers Free. The operational description, limits, budgets and costs are in
+[`DEPLOYMENT.md`](DEPLOYMENT.md); this document keeps the design rationale. Where the implementation differs from the original
+proposal, the section is marked **Implemented as:**.
+
+**Implemented as:**
+- One Worker (`worker/index.js`) with Workers Static Assets and one global SQLite-backed Durable Object (`worker/gateway.js`).
+- The Node backend was kept for local development (`npm start`); both share `lib/allocations-core.js`, so validation, strict
+  parsing, room verification and age handling are identical.
+- The request queue may wait briefly (bounded, default 8 s) instead of failing immediately, because a first visit sends up to six
+  requests; anything beyond the bound is refused with `503` + `Retry-After`.
+- Budget accounting is per **UTC day** and counts every upstream request (schedule or room check). Default 200.
+- When ETH cannot or may not be asked, a stored schedule is returned with its true age and a `stale` marker; otherwise an error.
 
 Priorities, in order: **1. smooth mobile UX, 2. zero unexpected hosting cost, 3. minimal ETH traffic, 4. accurate availability.**
 
-> **Platform numbers.** Free-plan quotas change. This document deliberately does not hard-code Cloudflare limits.
-> Before building, read the *current* "Limits" and "Pricing" pages for Workers, Workers Static Assets and Durable Objects, and
-> put the numbers you rely on into `wrangler.jsonc` vars and the budget table below. Items marked **(verify)** are
-> assumptions that must be checked.
+> **Platform numbers.** Free-plan quotas change. The numbers actually checked against Cloudflare's pages (2026-11-17) are in
+> [`DEPLOYMENT.md`](DEPLOYMENT.md) §3; items marked **(verify)** below were assumptions made before that check.
 
 ## 1. Why the current backend does not scale beyond one process
 

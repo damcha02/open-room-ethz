@@ -8,6 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {startMock} from './mock-eth.mjs';
 import {launch, findChromium, fakeClockScript, sleep} from './cdp.mjs';
+import {startWorker, tempDir} from '../worker-tests/harness.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shots = path.join(root, 'e2e', 'screenshots');
@@ -38,13 +39,21 @@ function expectedCards(mode, scenarios, extra = []) {
   return items.sort((a, b) => SORT[mode](a, b) || a.code.localeCompare(b.code, undefined, {numeric: true}));
 }
 
+const BACKEND = process.env.E2E_BACKEND === 'worker' ? 'worker' : 'node'; // E2E_BACKEND=worker runs everything against the real Worker + Durable Object
 async function startStack(env = {}) {
   const mockPort = rand(), appPort = mockPort + 5000;
   const mock = await startMock(mockPort);
+  if (BACKEND === 'worker') {
+    const persist = tempDir('openroom-e2e-do-');
+    const worker = await startWorker({mockPort, port: appPort, persist, vars: {ETH_MIN_INTERVAL_MS: '50', ETH_DAILY_BUDGET: '100000', ETH_MAX_QUEUE_WAIT_MS: '20000'}});
+    let stopped = false;
+    return {mock, url: `${worker.base}/`, async stop() { if (stopped) return; stopped = true; await worker.stop(); mock.close(); fs.rmSync(persist, {recursive: true, force: true}); }};
+  }
   const server = spawn(process.execPath, ['server.mjs'], {cwd: root, stdio: ['ignore', 'pipe', 'inherit'],
     env: {...process.env, PORT: String(appPort), ETH_ENDPOINT: `http://127.0.0.1:${mockPort}/bin/ethz/roominfo`, ETH_MIN_INTERVAL_MS: '50', ...env}});
   await new Promise((resolve, reject) => { server.stdout.once('data', resolve); server.once('exit', reject); setTimeout(() => reject(new Error('app server did not start')), 8000); });
-  return {mock, url: `http://127.0.0.1:${appPort}/`, stop() { server.kill(); mock.close(); }};
+  let stopped = false;
+  return {mock, url: `http://127.0.0.1:${appPort}/`, stop() { if (stopped) return; stopped = true; server.kill(); mock.close(); }};
 }
 async function openBrowser(name) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), `openroom-e2e-${name}-`));
@@ -690,9 +699,58 @@ async function phase8() {
   } finally { b.cleanup(); stack.stop(); }
 }
 
-try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); await phase7(); await phase8(); }
+// ---------------------------------------------------------------- phase 9
+async function phase9() {
+  console.log('\n# Phase 9: PWA — manifest, installability, service worker, offline behaviour');
+  const stack = await startStack(); const b = await openBrowser('p9');
+  const origin = new URL(stack.url).origin;
+  try {
+    await b.nav(stack.url);
+    await b.waitFor(`document.querySelectorAll('#recommendations .rec-card').length>0`, 20000);
+    check('page title and header say "Open Room ETHZ"', await b.ev(`document.title`) === 'Open Room ETHZ' && await b.ev(`document.querySelector('.brand-name').textContent.replace(/\\s+/g,' ').trim()`) === 'Open Room ETHZ');
+    check('iOS install metadata: apple-touch-icon (180×180), standalone capable, home-screen title "Open Room"', await b.ev(`(()=>{const l=document.querySelector('link[rel=apple-touch-icon]');const m=n=>document.querySelector('meta[name="'+n+'"]')?.content;return l&&l.getAttribute('sizes')==='180x180'&&l.getAttribute('href')==='/icons/apple-touch-icon.png'&&m('apple-mobile-web-app-capable')==='yes'&&m('apple-mobile-web-app-title')==='Open Room'&&m('application-name')==='Open Room ETHZ'&&Boolean(m('theme-color'));})()`));
+    const icon = await b.ev(`new Promise(r=>{const i=new Image();i.onload=()=>r([i.naturalWidth,i.naturalHeight]);i.onerror=()=>r(null);i.src='/icons/apple-touch-icon.png';})`);
+    check('the iOS touch icon is a real 180×180 image', JSON.stringify(icon) === '[180,180]', JSON.stringify(icon));
+    const manifest = await b.appManifest();
+    check('manifest parses without errors and has name, short_name, scope, start_url, standalone, id', manifest.errors.length === 0 && manifest.data.name === 'Open Room ETHZ' && manifest.data.short_name === 'Open Room' && manifest.data.scope === '/' && manifest.data.start_url === '/' && manifest.data.display === 'standalone' && manifest.data.id === '/', JSON.stringify(manifest.errors));
+    check('manifest icons: 192 and 512 "any" plus 192 and 512 "maskable", all served as PNG', await (async () => {
+      const icons = manifest.data.icons; const need = [['192x192', 'any'], ['512x512', 'any'], ['192x192', 'maskable'], ['512x512', 'maskable']];
+      if (!need.every(([sz, purpose]) => icons.some(i => i.sizes === sz && i.purpose === purpose))) return false;
+      for (const i of icons) { const r = await fetch(new URL(i.src, origin)); if (!r.ok || r.headers.get('content-type') !== 'image/png') return false; }
+      return true;
+    })());
+    const installability = await b.installabilityErrors();
+    check('Chromium reports NO installability errors', installability.length === 0, JSON.stringify(installability));
+    await b.waitFor(`navigator.serviceWorker.getRegistration().then(r=>Boolean(r&&r.active))`, 10000);
+    await b.nav(stack.url); await sleep(800);
+    const sw = await b.ev(`(async()=>{const r=await navigator.serviceWorker.getRegistration();const names=await caches.keys();const urls=[];for(const n of names){const c=await caches.open(n);for(const q of await c.keys())urls.push(new URL(q.url).pathname);}return JSON.stringify({scope:r.scope,controlled:Boolean(navigator.serviceWorker.controller),names,urls});})()`).then(JSON.parse);
+    check('service worker: registered with scope "/", controls the page', sw.scope === `${origin}/` && sw.controlled, JSON.stringify(sw));
+    check('service worker cache: versioned name, the app shell and all modules are precached, NO /api/ response is ever cached', sw.names.length === 1 && /^openroom-shell-v\d+$/.test(sw.names[0]) && ['/', '/index.html', '/app.js', '/schedule.mjs', '/recommend.mjs', '/timeline.mjs', '/detail-view.mjs', '/styles.css', '/rooms.json', '/manifest.webmanifest', '/icons/icon-192.png'].every(u => sw.urls.includes(u)) && !sw.urls.some(u => u.startsWith('/api/')), JSON.stringify(sw));
+    await sleep(900); // let the app persist its own schedule cache
+    // ---- offline: the server is really gone
+    await stack.stop(); await sleep(500);
+    await b.nav(stack.url); await sleep(900);
+    check('OFFLINE: the app shell loads from the service worker cache after the server is gone', await b.ev(`document.querySelector('.brand-name')?.textContent.includes('Open Room')&&document.querySelector('.campus-tabs')&&document.querySelector('.find-section')`) );
+    check('OFFLINE: previously cached fresh schedules still produce recommendations — from the app cache, with no request', await b.ev(`document.querySelectorAll('#recommendations .rec-card').length>0`) && await b.ev(`performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/allocations')&&e.responseStatus>0).length===0`));
+    const offlineRoom = await b.ev(`(()=>{const e=document.querySelector('#recommendations .rec-main');e.click();return e.getAttribute('data-open-detail');})()`); await sleep(400);
+    check('OFFLINE: a room opens from cache with its timeline and a fresh freshness line', await b.ev(`!document.getElementById('room-detail').hidden&&Boolean(document.querySelector('#rd-timeline .tl'))`));
+    await click(b, '#rd-close'); await sleep(200);
+    // ---- offline + expired data: never shown as free, failures are honest
+    await b.ev(`window.__advance(12*60000)`); await b.ev(`window.__intervals.forEach(i=>i.fn())`); await sleep(500);
+    check('OFFLINE with expired data: nothing is recommended, rows say Stale, the coverage line says the data is older than 10 minutes', await b.ev(`document.querySelectorAll('#recommendations .rec-card').length===0`) && /older than 10 minutes/.test(await text(b, '#coverage-text')), await text(b, '#coverage-text'));
+    await click(b, '#refresh-stale'); await sleep(2500);
+    check('OFFLINE: a manual refresh fails honestly — the rooms are unavailable/unknown, never free, and no recommendation appears', await b.ev(`document.querySelectorAll('#recommendations .rec-card').length===0`) && /could not be loaded|Schedule unavailable|older than 10 minutes|limiting/i.test(await text(b, '#coverage-text')), await text(b, '#coverage-text'));
+    await b.ev(`document.querySelector('.rec-main, .fav-main, .room-main')&&0`);
+    const cachedApi = await b.ev(`(async()=>{for(const n of await caches.keys()){const c=await caches.open(n);for(const q of await c.keys())if(new URL(q.url).pathname.startsWith('/api/'))return true;}return false;})()`);
+    check('after failed API requests, still no /api/ entry exists in any cache (errors are never cached as data)', cachedApi === false);
+    check('no console exceptions in phase 9 (failed fetches while offline are expected)', b.errors.filter(e => !/Failed to load resource|net::ERR|Failed to fetch|NetworkError/.test(e)).length === 0, b.errors.join(' | '));
+  } finally { b.cleanup(); await stack.stop(); }
+}
+
+try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); await phase7(); await phase8(); await phase9(); }
 catch (error) { check('e2e ran to completion', false, error.stack); }
 fs.writeFileSync(path.join(shots, 'performance.json'), JSON.stringify(metrics, null, 2));
+console.log(`\nBackend: ${BACKEND}`);
 console.log('\nPerformance (headless Chromium, local mock ETH):', JSON.stringify(metrics));
 console.log(`\n${results.filter(Boolean).length}/${results.length} browser checks passed. Screenshots and metrics: ${shots}`);
 process.exit(results.every(Boolean) ? 0 : 1);

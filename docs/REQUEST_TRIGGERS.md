@@ -50,3 +50,11 @@ or moving between days of a cached week. This table is the complete list; `e2e/r
 
 So the request volume is driven by **user actions and returns to the app**, not by time. This is what a global ETH budget in a
 shared cache (see `docs/PRODUCTION_ARCHITECTURE.md`) can plan with: per visit about 6–12 API calls, no background load.
+
+## What the server adds (production)
+
+Everything above describes the **browser → API** side. In production the API runs on a Cloudflare Worker whose single global
+Durable Object adds, for all users together: a shared 5-minute cache (a request that hits it costs ETH nothing), de-duplication,
+global request spacing, a shared 429 cooldown and a hard daily budget of upstream requests (default 200 per UTC day, counting
+schedule requests and room-existence checks). When ETH may not be asked, only a stored schedule can be returned, with its true age
+and a stale marker. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
