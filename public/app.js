@@ -1,6 +1,8 @@
 performance.mark('app-script-start');
 import {zurichParts,shiftDate,weekStart,displayTime,statusFromRecord,isFreshRecord,sourceAgeMs,MAX_STALE_MS} from './schedule.mjs';
-import {MORE_BATCH,INITIAL_SHOWN,MAX_SHOWN,normalizeMode,assessRecord,recommend,cardText,emptyMessage,orderCandidates,planBatch,planInitialLoad,favoriteRooms,summarizeCoverage,describeCoverage} from './recommend.mjs';
+import {MORE_BATCH,INITIAL_SHOWN,MAX_SHOWN,INITIAL_REQUEST_BUDGET,normalizeMode,assessRecord,recommend,cardText,emptyMessage,orderCandidates,planBatch,planInitialLoad,planRevalidation,needsRequest,favoriteRooms,summarizeCoverage,describeCoverage} from './recommend.mjs';
+import {layoutTimeline,nextChange,currentStatus,resolveRecord,statusBadge,freshnessInfo,intervalInfo,daySummary} from './timeline.mjs';
+import * as dv from './detail-view.mjs';
 
 const $=id=>document.getElementById(id);
 const STORAGE_KEY='openroom-prefs-v1';
@@ -11,7 +13,7 @@ const state={
   mode: normalizeMode(preferences.mode),
   attempted:new Map(),      // campus -> Set of room codes the home screen has asked to check
   showAllRecs:false,
-  expandedCards:new Set(),  // 'rec:CODE' / 'fav:CODE' detail panels on the home screen
+  detail:{open:false,code:null,day:null,selected:null,opener:null,pushed:false,scrollKey:null}, // the room-detail screen
   admitted:new Set(),       // rooms the app may request and keep refreshing on its own (bounded by the initial budget)
   planned:new Set(),        // campuses whose first load has been planned
   startupDone:false,
@@ -23,7 +25,6 @@ const state={
   timeFormat:preferences.timeFormat==='12'?'12':'24',
   rooms:[],
   expandedBuildings:new Set(),
-  expandedRooms:new Set(),
   cache:new Map(),
   inflight:new Map(),
   loadingCatalog:true,
@@ -40,8 +41,8 @@ function escapeAttr(s){return html(s);}
 function enqueue(work) {return new Promise((resolve,reject)=>{fetchQueue.push({work,resolve,reject});flushQueue();});}
 function flushQueue() {if(Date.now()<pausedUntil)return;while(running<MAX_SIMULTANEOUS && fetchQueue.length){const task=fetchQueue.shift();running++;Promise.resolve().then(task.work).then(task.resolve,task.reject).finally(()=>{running--;flushQueue();});}}
 // After a rate-limit answer nothing new is sent until the cooldown has passed; queued work simply waits.
-function pauseQueue(ms){pausedUntil=Math.max(pausedUntil,Date.now()+ms);clearTimeout(resumeTimer);resumeTimer=setTimeout(()=>{flushQueue();loadCurrentVisible();},pausedUntil-Date.now()+50);}
-function scheduleRetry(ms){const at=Date.now()+ms+100;if(retryTimer&&retryTimerAt<=at)return;clearTimeout(retryTimer);retryTimerAt=at;retryTimer=setTimeout(()=>{retryTimer=null;retryTimerAt=0;loadCurrentVisible();},at-Date.now());}
+function pauseQueue(ms){pausedUntil=Math.max(pausedUntil,Date.now()+ms);clearTimeout(resumeTimer);resumeTimer=setTimeout(()=>{flushQueue();retryErrors();},pausedUntil-Date.now()+50);}
+function scheduleRetry(ms){const at=Date.now()+ms+100;if(retryTimer&&retryTimerAt<=at)return;clearTimeout(retryTimer);retryTimerAt=at;retryTimer=setTimeout(()=>{retryTimer=null;retryTimerAt=0;retryErrors();},at-Date.now());}
 function loadPersistedCache(){try{const raw=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');if(raw.v!==2||!Array.isArray(raw.entries))return;const now=Date.now();for(const [k,r] of raw.entries){const age=sourceAgeMs(r,now);if(r&&r.state==='ready'&&Array.isArray(r.allocations)&&Number.isFinite(age)&&age<MAX_STALE_MS)state.cache.set(k,r);}}catch{}}
 function persistCache(){clearTimeout(persistTimer);persistTimer=setTimeout(()=>{try{const entries=[...state.cache].filter(([,r])=>r.state==='ready').sort((a,b)=>b[1].receivedAt-a[1].receivedAt).slice(0,100);localStorage.setItem(CACHE_KEY,JSON.stringify({v:2,entries}));}catch{}},500);}
 function cacheKey(room,day=state.day){return `${room}|${weekStart(day)}`;}
@@ -83,8 +84,8 @@ async function ensureSchedule(code,day=state.day,force=false){
   promise.finally(()=>{state.inflight.delete(key);renderSoon();});
   return promise;
 }
-// aheadMs>0 also refreshes data that is about to expire, so home recommendations do not vanish and reappear.
-function scheduleLoad(codes,day=state.day,aheadMs=0){for(const code of codes){const key=cacheKey(code,day);const record=state.cache.get(key);if(needsLoad(record,aheadMs)&&!state.inflight.has(key))void ensureSchedule(code,day,aheadMs>0&&isFresh(record));}}
+// Requests only rooms that have no data, stale data or an expired error backoff, and are not already in flight.
+function scheduleLoad(codes,day=state.day){for(const code of codes){const key=cacheKey(code,day);if(needsLoad(state.cache.get(key))&&!state.inflight.has(key))void ensureSchedule(code,day);}}
 function getStatus(code,day=state.day){const now=zurichParts();return statusFromRecord(state.cache.get(cacheKey(code,day)),{day,today:now.date,now:now.minute,format:state.timeFormat});}
 function isVisibleRoom(r){return r.campus===state.campus;}
 function matchingRooms(){const search=state.search.toUpperCase().trim();return allRooms().filter(r=>isVisibleRoom(r)&&(!search||`${r.code} ${r.building}`.includes(search)));}
@@ -103,28 +104,7 @@ function renderDateStrip(){
 }
 function statusHtml(s){const classes={free:'status-free',busy:'status-busy',blocked:'status-blocked',unknown:'status-unknown',loading:'status-loading'};return `<div class="room-status ${classes[s.state]||'status-unknown'}"><span class="status-dot"></span><span class="status-text">${html(s.text)}${s.stale?' · Stale':''}</span></div>`;}
 function favoriteButton(code){const saved=state.favorites.has(code);return `<button class="favorite-btn ${saved?'saved':''}" type="button" data-favorite="${escapeAttr(code)}" aria-pressed="${saved}" aria-label="${saved?'Remove':'Add'} ${escapeAttr(code)} ${saved?'from':'to'} favorites" title="${saved?'Remove from favorites':'Add to favorites'}">${saved?'★':'☆'}</button>`;}
-function roomHtml(r){const s=getStatus(r.code);const open=state.expandedRooms.has(r.code);return `<div class="room-entry"><div class="room-row"><button class="room-main" type="button" data-open-room="${escapeAttr(r.code)}" aria-expanded="${open}"><div><div class="room-code">${html(r.code)}</div><div class="room-hint">${open?'Hide timetable':'View timetable'} ${open?'↑':'→'}</div></div>${statusHtml(s)}</button>${favoriteButton(r.code)}</div>${open?detailHtml(r,s):''}</div>`;}
-function detailHtml(r,s,day=state.day){
-  const viewFrom=480,viewTo=1320;
-  let timeline='';
-  let freeText='';
-  let bookings='';
-  if(s.state==='loading'||(s.state==='unknown'&&!s.blocks.length&&!s.free.length)){
-    timeline=`<div class="empty-card">${s.state==='loading'?'Loading timetable…':html(s.text)+' — availability is unknown.'}${s.message?`<br><small>${html(s.message)}</small>`:''}</div>`;
-  }else{
-    const colors=s.blocks.map(b=>{
-      const start=Math.max(viewFrom,b.start),end=Math.min(viewTo,b.end);
-      if(end<=start)return '';
-      return `<span class="timeline-segment ${b.type===8?'restricted':''}" style="left:${100*(start-viewFrom)/(viewTo-viewFrom)}%;width:${100*(end-start)/(viewTo-viewFrom)}%" title="${escapeAttr(b.title||'Blocked interval')}"></span>`;
-    }).join('');
-    timeline=`<div class="detail-small-title">Daily overview (08:00–22:00)</div><div class="timeline-wrap"><div class="timeline-bar" aria-label="Green indicates unreserved intervals, salmon indicates bookings, amber indicates block entries">${colors}</div><div class="timeline-labels"><span>08</span><span>12</span><span>16</span><span>20</span><span>22</span></div></div>`;
-    freeText=`<div class="detail-small-title">Unreserved intervals</div><div class="free-windows">${s.free.length?s.free.map(i=>`${displayTime(i.start,state.timeFormat)}–${displayTime(i.end,state.timeFormat)}`).join(' · '):'None in displayed hours'}</div>`;
-    bookings=`<div class="detail-small-title">Reservations and blocks</div><div class="slot-list">${s.blocks.length?s.blocks.map(b=>`<div class="slot"><span class="slot-time">${displayTime(b.start,state.timeFormat)}–${displayTime(b.end,state.timeFormat)}</span><span class="slot-title">${html(b.title|| (b.type===8?'Blocked interval (type 8)':b.type===2?'Reservation':`Blocked interval (type ${b.type??'unknown'})`))}</span></div>`).join(''):'<span class="slot-title">No published entries for this date.</span>'}</div>`;
-  }
-  const [from,to]=weekBounds(day);
-  const ethUrl=new URL('https://ethz.ch/staffnet/de/service/raeume-gebaeude/rauminfo/raumdetails/allocation.html');ethUrl.searchParams.set('room',r.code);ethUrl.searchParams.set('from',from);ethUrl.searchParams.set('to',to);
-  return `<div class="room-details">${s.stale&&s.fetchedAt?`<div class="detail-caveat">Cached data from ${displayTime(zurichParts(new Date(s.fetchedAt)).minute,state.timeFormat)} — refreshing…</div>`:''}${timeline}${freeText}${bookings}<div class="room-details-bottom"><a class="source-link" href="${escapeAttr(ethUrl.toString())}" target="_blank" rel="noopener noreferrer">View official Belegungsplan ↗</a><span class="detail-caveat">Schedule ≠ occupancy</span></div></div>`;
-}
+function roomHtml(r){const s=getStatus(r.code);return `<div class="room-entry"><div class="room-row"><button class="room-main" type="button" data-open-detail="${escapeAttr(r.code)}" aria-haspopup="dialog"><div><div class="room-code">${html(r.code)}</div><div class="room-hint">View timetable →</div></div>${statusHtml(s)}</button>${favoriteButton(r.code)}</div></div>`;}
 function renderResults(){
   if(state.loadingCatalog){setHtml($('room-results'),'<div class="empty-card">Loading room catalog…</div>');return;}
   if(state.catalogError){setHtml($('room-results'),'<div class="empty-card">Could not load room catalog. Refresh to try again.</div>');return;}
@@ -150,7 +130,7 @@ function renderResults(){
   setHtml($('room-results'),content);
 }
 // ---------- Rendering helpers: no DOM churn, coalesced renders, focus kept ----------
-const FOCUS_ATTRS=['data-toggle-card','data-favorite','data-open-room','data-building'];
+const FOCUS_ATTRS=['data-open-detail','data-favorite','data-building'];
 function focusKey(node){for(const a of FOCUS_ATTRS){const v=node.getAttribute&&node.getAttribute(a);if(v!==null&&v!==undefined)return [a,v];}return null;}
 function restoreFocus(root,key){if(!key)return;for(const n of root.querySelectorAll(`[${key[0]}]`))if(n.getAttribute(key[0])===key[1]){n.focus({preventScroll:true});return;}}
 // Replaces innerHTML only when the markup really changed (keeps scroll, focus, hover and layout stable).
@@ -176,14 +156,15 @@ function admitAndLoad(codes){for(const c of codes)state.admitted.add(c);schedule
 // Favorites that are visible but whose schedule nobody has asked for (budget exhausted): they load only on a deliberate action.
 function uncheckedFavorites(){const day=zurichParts().date;return favoriteRooms(allRooms(),state.favorites).map(r=>r.code).filter(c=>!state.admitted.has(c)&&!state.cache.has(cacheKey(c,day))&&!state.inflight.has(cacheKey(c,day)));}
 function getHomeStatus(code){const day=zurichParts().date;if(uncheckedFavorites().includes(code))return {state:'unknown',text:'Not checked yet',blocks:[],free:[],message:'This favorite has not been requested yet to keep ETH traffic low. Tap it to load its schedule.'};return getStatus(code,day);}
-// Never polls in the background: nothing is requested while the tab is hidden. aheadMs>0 (minute tick only) refreshes data that is about to expire.
-function loadHome(aheadMs=0){if(state.loadingCatalog||state.catalogError)return;if(!state.planned.has(state.campus)){state.planned.add(state.campus);runInitialPlan(!state.startupDone);state.startupDone=true;}if(document.hidden)return;scheduleLoad([...state.admitted],zurichParts().date,aheadMs);}
+// First load of a campus only (see runInitialPlan). Never polls: nothing is requested while the tab is hidden, and expired data is
+// revalidated only on return to the app (revalidateForeground), on a deliberate tap, or when a room is opened.
+function loadHome(){if(state.loadingCatalog||state.catalogError)return;if(!state.planned.has(state.campus)){state.planned.add(state.campus);runInitialPlan(!state.startupDone);state.startupDone=true;}if(document.hidden)return;scheduleLoad([...state.admitted],zurichParts().date);}
 function toggleFavorite(code){if(state.favorites.has(code))state.favorites.delete(code);else state.favorites.add(code);store();renderAll();} // starring never triggers a request by itself
 function zurichClock(iso){const t=Date.parse(iso);return Number.isFinite(t)?displayTime(zurichParts(new Date(t)).minute,state.timeFormat):null;}
-function favRowHtml(r){const z=zurichParts();const s=getHomeStatus(r.code);const key='fav:'+r.code;const open=state.expandedCards.has(key);const place=r.campus?`${html(r.building)} · ${html(r.campus)}`:html(r.building);
-  return `<div class="fav-entry"><div class="fav-row"><button class="fav-main" type="button" data-toggle-card="${escapeAttr(key)}" aria-expanded="${open}"><span class="rec-id"><span class="rec-code">${html(r.code)}</span><span class="rec-building">${place}</span></span>${statusHtml(s)}</button>${favoriteButton(r.code)}</div>${open?detailHtml(r,s,z.date):''}</div>`;}
-function recCardHtml(item){const code=item.room.code,key='rec:'+code,open=state.expandedCards.has(key),z=zurichParts();const text=cardText(item,state.timeFormat);
-  return `<article class="rec-card"><div class="rec-row"><button class="rec-main" type="button" data-toggle-card="${escapeAttr(key)}" aria-expanded="${open}"><span class="rec-id"><span class="rec-code">${html(code)}</span><span class="rec-building">${html(item.room.building)}</span></span><span class="rec-info"><span class="rec-headline"><span class="status-dot" aria-hidden="true"></span>${html(text.headline)}</span><span class="rec-detail">${html(text.detail)}</span></span></button>${favoriteButton(code)}</div>${open?detailHtml(item.room,getStatus(code,z.date),z.date):''}</article>`;}
+function favRowHtml(r){const s=getHomeStatus(r.code);const place=r.campus?`${html(r.building)} · ${html(r.campus)}`:html(r.building);
+  return `<div class="fav-entry"><div class="fav-row"><button class="fav-main" type="button" data-open-detail="${escapeAttr(r.code)}" aria-haspopup="dialog"><span class="rec-id"><span class="rec-code">${html(r.code)}</span><span class="rec-building">${place}</span></span>${statusHtml(s)}</button>${favoriteButton(r.code)}</div></div>`;}
+function recCardHtml(item){const code=item.room.code;const text=cardText(item,state.timeFormat);
+  return `<article class="rec-card"><div class="rec-row"><button class="rec-main" type="button" data-open-detail="${escapeAttr(code)}" aria-haspopup="dialog"><span class="rec-id"><span class="rec-code">${html(code)}</span><span class="rec-building">${html(item.room.building)}</span></span><span class="rec-info"><span class="rec-headline"><span class="status-dot" aria-hidden="true"></span>${html(text.headline)}</span><span class="rec-detail">${html(text.detail)}</span></span></button>${favoriteButton(code)}</div></article>`;}
 function renderFavorites(){const list=favoriteRooms(allRooms(),state.favorites);$('favorites-section').hidden=list.length===0;const btn=$('check-favorites');
   if(!list.length){setHtml($('favorites-list'),'');btn.hidden=true;return;}
   const pending=uncheckedFavorites(),paused=Date.now()<pausedUntil;
@@ -197,10 +178,10 @@ function renderHome(){
   setText($('mode-help'),MODE_HELP[state.mode]);
   const z=zurichParts();setText($('home-time'),`Zurich · ${displayTime(z.minute,state.timeFormat)}`);
   const box=$('recommendations'),more=$('rec-more'),check=$('check-more');
-  if(state.loadingCatalog||state.catalogError){setHtml(box,`<div class="rec-empty" role="status">${state.catalogError?'Could not load the room catalog. Refresh to try again.':'Loading room catalog…'}</div>`);more.hidden=true;check.hidden=true;setText($('coverage-text'),'');setText($('coverage-detail'),'');return;}
+  if(state.loadingCatalog||state.catalogError){setHtml(box,`<div class="rec-empty" role="status">${state.catalogError?'Could not load the room catalog. Refresh to try again.':'Loading room catalog…'}</div>`);more.hidden=true;check.hidden=true;$('refresh-stale').hidden=true;setText($('coverage-text'),'');setText($('coverage-detail'),'');return;}
   const {rooms,attempted,ctx}=checkedRooms();
   const items=recommend({rooms:rooms.filter(r=>attempted.has(r.code)),mode:state.mode,getRecord:todayRecord,ctx});
-  const summary=summarizeCoverage({rooms,attempted,getRecord:todayRecord,ctx});
+  const summary=summarizeCoverage({rooms,attempted,getRecord:todayRecord,ctx,isInflight:code=>state.inflight.has(cacheKey(code,ctx.today))});
   const cov=describeCoverage(summary,{pausedUntilMs:pausedUntil,nowMs:Date.now()});
   const shown=items.slice(0,state.showAllRecs?MAX_SHOWN:INITIAL_SHOWN);
   let markup;
@@ -216,10 +197,109 @@ function renderHome(){
   $('coverage').dataset.kind=cov.kind;
   setText($('coverage-text'),cov.text);
   setText($('coverage-detail'),[refreshed?`Last refresh ${refreshed}`:'',cov.detail].filter(Boolean).join(' · '));
+  const stale=$('refresh-stale'),staleN=Math.min(MORE_BATCH,summary.staleCodes.length);stale.hidden=staleN===0;stale.disabled=Date.now()<pausedUntil;setText(stale,Date.now()<pausedUntil?'Paused — ETH rate limit':`Refresh ${staleN} stale room${staleN===1?'':'s'}`);
   const candidates=uncheckedCandidates(),paused=Date.now()<pausedUntil;
   check.hidden=candidates.length===0;check.disabled=paused;setText(check,paused?'Paused — ETH rate limit':`Check ${Math.min(MORE_BATCH,candidates.length)} more room${Math.min(MORE_BATCH,candidates.length)===1?'':'s'}`);
 }
-function renderAll(){renderHome();renderResults();if(!firstRenderMarked){firstRenderMarked=true;performance.mark('first-render');}}
+function renderAll(){renderHome();renderResults();renderDetail();if(!firstRenderMarked){firstRenderMarked=true;performance.mark('first-render');}}
+// ---------- Room detail screen (Stage 3B). Pure logic: timeline.mjs; markup: detail-view.mjs ----------
+const shell=()=>document.querySelector('.app-shell');
+function roomFor(code){return allRooms().find(r=>r.code===code)||{code,building:code.split(' ')[0],campus:null};}
+function dayLabelOf(day,long=false){return labelDay(day,long?{weekday:'long',day:'numeric',month:'long'}:{weekday:'short',day:'numeric',month:'short'});}
+function detailRecord(){return state.cache.get(cacheKey(state.detail.code,state.detail.day));}
+// Opening a room needs no request when its week is fresh in the cache; otherwise exactly one request (a deliberate action).
+function ensureDetailData(onOpen){const {code,day}=state.detail,key=cacheKey(code,day);if(state.inflight.has(key))return;
+  if(onOpen){if(needsLoad(state.cache.get(key)))void ensureSchedule(code,day);}      // fresh: none; missing/stale/expired backoff: one
+  else if(!state.cache.has(key))void ensureSchedule(code,day);}                       // date navigation reuses ANY cached week, requests only a missing one
+function openRoom(code,opener){
+  if(state.detail.open)return;
+  Object.assign(state.detail,{open:true,code,day:zurichParts().date,selected:null,opener:opener||null,scrollKey:null});
+  try{history.pushState({openroomDetail:code},'','#room');state.detail.pushed=true;}catch{state.detail.pushed=false;}
+  document.body.classList.add('rd-open');shell().inert=true;$('room-detail').hidden=false;
+  renderDetail();$('rd-close').focus({preventScroll:true});performance.mark('detail-opened');
+  ensureDetailData(true);
+}
+function closeRoom(fromPop=false){
+  if(!state.detail.open)return;
+  const {opener,pushed}=state.detail;
+  state.detail.open=false;state.detail.pushed=false;$('room-detail').hidden=true;shell().inert=false;document.body.classList.remove('rd-open');
+  if(!fromPop&&pushed){try{history.back();}catch{}}
+  if(opener&&document.contains(opener))opener.focus({preventScroll:true});
+}
+function setDetailDay(day){state.detail.day=day;state.detail.selected=null;state.detail.scrollKey=null;ensureDetailData(false);renderDetail();}
+function refreshDetail(){if(Date.now()<pausedUntil)return;const {code,day}=state.detail;void ensureSchedule(code,day,true);renderDetail();} // manual refresh
+function renderDetail(){
+  const d=state.detail;if(!d.open)return;
+  const room=roomFor(d.code),z=zurichParts(),nowMs=Date.now(),fmt=state.timeFormat,paused=nowMs<pausedUntil;
+  // 1. current status (today) -------------------------------------------------
+  const todayRes=resolveRecord(state.cache.get(cacheKey(d.code,z.date)),z.date,nowMs);
+  let badge,text,nextText=null;
+  if(todayRes.kind==='ready'){const cs=currentStatus(todayRes.model,z.minute,fmt);badge=statusBadge({state:cs.state,stale:todayRes.stale});text=cs.text;nextText=nextChange(todayRes.model,z.minute,fmt).text;}
+  else if(todayRes.kind==='loading'){badge=statusBadge({state:'loading'});text='Loading schedule…';}
+  else{badge=statusBadge({state:'unknown'});text=todayRes.problem.heading;}
+  const viewRec=detailRecord(),fresh=freshnessInfo(viewRec,nowMs,fmt);
+  setHtml($('rd-head'),dv.headHtml({room,favoriteButton:favoriteButton(room.code)}));
+  setHtml($('rd-status'),dv.statusHtml({badge,text,nextText,fresh,paused}));
+  // 2. day navigation ---------------------------------------------------------
+  const first=weekStart(d.day);
+  setHtml($('rd-daybar'),dv.dayBarHtml({label:dayLabelOf(d.day),isToday:d.day===z.date}));
+  setHtml($('rd-weekstrip'),dv.weekStripHtml(Array.from({length:7},(_,i)=>{const day=shiftDate(first,i);return {day,short:labelDay(day,{weekday:'short'}),num:Number(day.slice(-2)),selected:day===d.day,today:day===z.date,aria:dayLabelOf(day,true)};})));
+  // 3. timeline for the viewed day -------------------------------------------
+  const viewRes=resolveRecord(viewRec,d.day,nowMs);
+  let summary='',timeline,list='',card=null,layout=null;
+  if(viewRes.kind==='ready'){
+    layout=layoutTimeline(viewRes.model,{nowMinute:d.day===z.date?z.minute:null});
+    if(d.selected&&!layout.blocks.some(b=>b.id===d.selected))d.selected=null;
+    summary=daySummary(layout);
+    timeline=dv.legendHtml()+(viewRes.stale?'<p class="rd-stale-note" role="status">Stale data: this schedule may have changed. Free time is shown hatched until it is refreshed.</p>':'')+dv.timelineHtml({layout,format:fmt,stale:viewRes.stale,selectedId:d.selected,dayLabel:dayLabelOf(d.day)});
+    list=dv.listHtml({layout,format:fmt,selectedId:d.selected});
+    const picked=layout.blocks.find(b=>b.id===d.selected);if(picked)card=intervalInfo(picked,fmt);
+  }else if(viewRes.kind==='loading')timeline=dv.unavailableHtml({heading:'Loading schedule…',message:'Availability is unknown until the schedule has loaded.',retry:false});
+  else timeline=dv.unavailableHtml({heading:viewRes.problem.heading,message:viewRes.problem.message,retry:true,paused});
+  setText($('rd-summary'),summary);setHtml($('rd-timeline'),timeline);setHtml($('rd-list'),list);
+  const cardEl=$('rd-card');cardEl.hidden=!card;setHtml(cardEl,dv.cardHtml(card));
+  const [from,to]=weekBounds(d.day);const url=new URL('https://ethz.ch/staffnet/de/service/raeume-gebaeude/rauminfo/raumdetails/allocation.html');url.searchParams.set('room',room.code);url.searchParams.set('from',from);url.searchParams.set('to',to);
+  setHtml($('rd-foot'),`Free means no published reservation; it does not mean the room is empty, open or accessible. Availability is based on ETH's reservation schedule, not actual room occupancy. Blocked intervals (for example type 8) are shown as published and are not treated as opening hours. <a class="source-link" href="${escapeAttr(url.toString())}" target="_blank" rel="noopener noreferrer">View official Belegungsplan ↗</a>`);
+  // 4. first scroll position per room and day (today: around now; other days: around 08:00) ----
+  const key=`${d.code}|${d.day}`;
+  if(layout&&d.scrollKey!==key){d.scrollKey=key;const y=layout.nowTop!==null?layout.nowTop-120:(layout.ticks.find(t=>t.minute===480)?.top??0)-24;const sc=$('rd-scroll'),tl=$('rd-timeline'); // the offset below is measured inside the scroller, not against the fixed overlay
+    requestAnimationFrame(()=>{const offset=tl.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,offset+y);});}
+}
+// A tap on a block (or a list row) selects it; a second tap closes the details again.
+function selectInterval(id){state.detail.selected=state.detail.selected===id?null:id;renderDetail();}
+$('room-detail').addEventListener('click',e=>{
+  const t=e.target;
+  if(t.closest('#rd-close')){closeRoom();return;}
+  if(t.closest('#rd-prev')){setDetailDay(shiftDate(state.detail.day,-1));return;}
+  if(t.closest('#rd-next')){setDetailDay(shiftDate(state.detail.day,1));return;}
+  if(t.closest('#rd-today')){setDetailDay(zurichParts().date);return;}
+  const dayBtn=t.closest('[data-rd-day]');if(dayBtn){setDetailDay(dayBtn.dataset.rdDay);return;}
+  const iv=t.closest('[data-interval]');if(iv){selectInterval(iv.dataset.interval);return;}
+  if(t.closest('#rd-card-close')){state.detail.selected=null;renderDetail();return;}
+  if(t.closest('#rd-refresh')||t.closest('#rd-retry')){refreshDetail();}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.detail.open&&!document.querySelector('dialog[open]')){if(state.detail.selected){state.detail.selected=null;renderDetail();}else closeRoom();}});
+window.addEventListener('popstate',()=>{if(state.detail.open)closeRoom(true);});
+
+// ---------- When are requests made? (docs/REQUEST_TRIGGERS.md) ----------
+// Failed requests are retried once their backoff has ended, only for rooms the user can currently see. Merely stale data is never refetched here.
+function relevantCodes(){const codes=new Set(state.admitted);if(state.detail.open)codes.add(state.detail.code);if(!state.loadingCatalog){const grouped=matchingRooms();for(const r of grouped)if(searchExpands(grouped)||state.expandedBuildings.has(r.building))codes.add(r.code);}return codes;}
+function retryErrors(){const days=new Set([zurichParts().date,state.day]);if(state.detail.open)days.add(state.detail.day);const now=Date.now();
+  for(const code of relevantCodes())for(const day of days){const key=cacheKey(code,day),rec=state.cache.get(key);if(rec&&rec.state==='error'&&now>=(rec.retryAt||0)&&!state.inflight.has(key))void ensureSchedule(code,day);}}
+// Foreground revalidation: when the app comes back to the front, expired schedules are re-requested within the request budget
+// (the open room first, then favorites of this campus, then the other checked rooms). At most once per 30 s; never in a hidden tab.
+let lastRevalidateAt=0;
+function revalidateForeground(){
+  if(state.loadingCatalog||state.catalogError||document.hidden)return;
+  const now=Date.now();if(now-lastRevalidateAt<30_000)return;lastRevalidateAt=now;
+  const ctx=homeCtx(),today=ctx.today,inflightToday=c=>state.inflight.has(cacheKey(c,today));
+  let budget=INITIAL_REQUEST_BUDGET,detailCode=null;
+  if(state.detail.open){const {code,day}=state.detail,key=cacheKey(code,day);if(!state.inflight.has(key)&&needsRequest(state.cache.get(key),ctx)){detailCode=code;budget--;void ensureSchedule(code,day,true);}}
+  const campus=new Set(campusRooms().map(r=>r.code));
+  const favs=favoriteRooms(allRooms(),state.favorites).map(r=>r.code).filter(c=>state.admitted.has(c)).sort((a,b)=>campus.has(b)-campus.has(a));
+  const candidates=[...favs,...attemptedSet(),...state.admitted].filter(c=>!inflightToday(c)&&!(c===detailCode&&cacheKey(c,state.detail.day)===cacheKey(c,today)));
+  for(const code of planRevalidation({candidates,getRecord:todayRecord,ctx,budget}))void ensureSchedule(code,today,true);
+}
 function loadCurrentVisible(){if(state.loadingCatalog)return;const grouped=matchingRooms();const openCodes=grouped.filter(r=>searchExpands(grouped)||state.expandedBuildings.has(r.building)).map(r=>r.code);scheduleLoad(openCodes);loadHome();}
 function syncCampusTabs(){document.querySelectorAll('.campus-tab').forEach(b=>{const on=b.dataset.campus===state.campus;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});}
 function switchCampus(next){if(!CAMPUSES.includes(next))return;state.campus=next;state.showAllRecs=false;syncCampusTabs();store();renderAll();loadCurrentVisible();}
@@ -233,7 +313,6 @@ $('free-only').addEventListener('change',e=>{state.freeOnly=e.target.checked;$('
 document.querySelectorAll('.campus-tab').forEach(b=>b.addEventListener('click',()=>switchCampus(b.dataset.campus)));
 document.querySelectorAll('.mode-btn').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===state.mode)));
 $('room-results').addEventListener('click',e=>{
-  const room=e.target.closest('[data-open-room]');if(room){const code=room.dataset.openRoom;if(state.expandedRooms.has(code))state.expandedRooms.delete(code);else state.expandedRooms.add(code);renderResults();return;}
   const building=e.target.closest('[data-building]');if(building){const code=building.dataset.building;if(state.expandedBuildings.has(code))state.expandedBuildings.delete(code);else state.expandedBuildings.add(code);renderResults();loadCurrentVisible();}
 });
 $('refresh-btn').addEventListener('click',()=>{
@@ -245,11 +324,12 @@ $('refresh-btn').addEventListener('click',()=>{
 // Home screen: one delegated handler for stars, expandable cards, modes and the two batch buttons.
 document.addEventListener('click',e=>{
   const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return;}
-  const card=e.target.closest('[data-toggle-card]');if(card){const key=card.dataset.toggleCard;if(state.expandedCards.has(key))state.expandedCards.delete(key);else{state.expandedCards.add(key);if(key.startsWith('fav:')){const code=key.slice(4);if(uncheckedFavorites().includes(code))admitAndLoad([code]);}}renderHome();return;} // opening an unchecked favorite is a deliberate request
+  const open=e.target.closest('[data-open-detail]');if(open){openRoom(open.dataset.openDetail,open);return;} // every room entry opens the same detail screen
   const mode=e.target.closest('[data-mode]');if(mode){state.mode=normalizeMode(mode.dataset.mode);state.showAllRecs=false;store();renderHome();}
 });
 $('rec-more').addEventListener('click',()=>{state.showAllRecs=!state.showAllRecs;renderHome();});
 $('check-more').addEventListener('click',()=>{if(Date.now()<pausedUntil)return;addBatch(MORE_BATCH);renderHome();loadHome();});
+$('refresh-stale').addEventListener('click',()=>{if(Date.now()<pausedUntil)return;const day=zurichParts().date;for(const code of summarizeCoverage({rooms:checkedRooms().rooms,attempted:checkedRooms().attempted,getRecord:todayRecord,ctx:homeCtx(),isInflight:c=>state.inflight.has(cacheKey(c,day))}).staleCodes.slice(0,MORE_BATCH)){state.admitted.add(code);void ensureSchedule(code,day,true);}renderHome();}); // manual, bounded refresh
 $('check-favorites').addEventListener('click',()=>{if(Date.now()<pausedUntil)return;admitAndLoad(uncheckedFavorites().slice(0,MORE_BATCH));renderHome();});
 $('search-btn').addEventListener('click',()=>{const input=$('room-search');input.scrollIntoView({block:'center'});input.focus();});
 $('settings-btn').addEventListener('click',()=>$('settings-dialog').showModal());
@@ -269,6 +349,8 @@ $('add-room-form').addEventListener('submit',e=>{
 
 async function start(){loadPersistedCache();syncCampusTabs();renderDateStrip();renderAll();try{const response=await fetch('/rooms.json');if(!response.ok)throw Error('Cannot load catalog');const list=await response.json();if(!Array.isArray(list))throw Error('Invalid catalog');state.rooms=list;state.loadingCatalog=false;renderAll();loadHome();}catch{state.loadingCatalog=false;state.catalogError=true;renderAll();}}
 start();
-setInterval(()=>{if(document.hidden)return;const {date}=zurichParts();if(date!==state.day && state.day===shiftDate(date,-1))setDay(date);else{renderDateStrip();renderAll();loadCurrentVisible();loadHome(120000);}},60000); // local recalculation every minute; ETH is only asked for data about to expire, never while hidden
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){renderDateStrip();renderAll();loadCurrentVisible();}});
+// Once a minute the app only RECALCULATES from its cache (time-dependent status, 'now' line, labels). It never requests anything.
+setInterval(()=>{if(document.hidden)return;const {date}=zurichParts();if(date!==state.day && state.day===shiftDate(date,-1))setDay(date);else{renderDateStrip();renderAll();}},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){renderDateStrip();renderAll();revalidateForeground();}});
+window.addEventListener('pageshow',e=>{if(e.persisted){renderDateStrip();renderAll();revalidateForeground();}});
 if('serviceWorker' in navigator && window.isSecureContext){navigator.serviceWorker.register('/sw.js').catch(()=>{});}

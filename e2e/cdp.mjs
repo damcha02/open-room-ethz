@@ -57,7 +57,7 @@ async function launchOnce({binary, port, profile, width = 375, height = 812}) {
     async nav(url) { await send('Page.navigate', {url}); await sleep(500); await api.waitFor(`document.readyState==='complete'`); },
     async screenshot(file) { const r = await send('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false}); fs.writeFileSync(file, Buffer.from(r.result.data, 'base64')); },
     async press(key) {
-      const code = {Enter: 13, ' ': 32, Tab: 9}[key];
+      const code = {Enter: 13, ' ': 32, Tab: 9, Escape: 27}[key];
       const base = {key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code, text: key === 'Enter' ? '\r' : key === ' ' ? ' ' : undefined};
       await send('Input.dispatchKeyEvent', {type: 'keyDown', ...base}); await send('Input.dispatchKeyEvent', {type: 'keyUp', ...base});
     },
@@ -65,7 +65,9 @@ async function launchOnce({binary, port, profile, width = 375, height = 812}) {
   };
   return api;
 }
-/** Freezes the page clock at `iso` (+ shiftMinutes). Time only moves when a test changes the shift, so results do not
- * drift with the wall clock and records persisted before a reload never look like they come from the future. */
-export const fakeClockScript = (isoUtc, shiftMinutes = 0) => `(()=>{const R=Date;const base=R.parse(${JSON.stringify(isoUtc)})+${shiftMinutes}*60000;
-class FD extends R{constructor(...a){if(a.length===0)super(base);else super(...a);}static now(){return base;}}window.Date=FD;})();`;
+/** Freezes the page clock at `iso` (+ shiftMinutes). Time only moves when a test says so (`window.__advance(ms)` or a new shift
+ * before a reload), so results do not drift with the wall clock and persisted records never look like they come from the
+ * future. `window.__intervals` records every setInterval callback so a test can fire "the minute tick" on demand. */
+export const fakeClockScript = (isoUtc, shiftMinutes = 0) => `(()=>{const R=Date;let base=R.parse(${JSON.stringify(isoUtc)})+${shiftMinutes}*60000;
+class FD extends R{constructor(...a){if(a.length===0)super(base);else super(...a);}static now(){return base;}}window.Date=FD;window.__advance=ms=>{base+=ms;};
+const si=window.setInterval;window.__intervals=[];window.setInterval=(fn,ms,...a)=>{window.__intervals.push({fn,ms});return si(fn,ms,...a);};})();`;

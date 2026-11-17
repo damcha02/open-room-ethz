@@ -124,9 +124,12 @@ Reported exactly: "Recommendations based on 8 of 64 listed rooms checked." It di
 *all checked rooms unavailable* and *rate limited* (which takes priority over loading while the queue is paused). The app
 never claims to have found the best room on a campus unless every listed room was checked.
 
-### Local recalculation
-Time-dependent results are recalculated every minute from cached data. Only data nearing the end of the freshness window is
-refreshed (once per minute tick, visible tab only), so results do not disappear and reappear.
+### Local recalculation and revalidation
+Time-dependent results (status text, the current-time line, recommendations) are recalculated every minute **from the cache
+only**: the tick never makes a request. Expired data is shown as **Stale** and never recommended. It is refreshed
+(a) when the app returns to the foreground, within the request budget and at most every 30 s, (b) on a deliberate tap
+("Refresh N stale rooms", the detail screen's Refresh, opening a room), or (c) after a failed request once its backoff ended.
+The complete list of triggers is in [`REQUEST_TRIGGERS.md`](REQUEST_TRIGGERS.md).
 
 ## 5b. Performance rules
 
@@ -145,6 +148,44 @@ intervals, a distinct red-brown treatment for bookings, amber for blocks and neu
 radii. All interactive targets are at least 44 px. No decorative animation (the loading dot pulse respects
 `prefers-reduced-motion`). Keyboard navigation and visible focus rings are preserved.
 
-## 7. Out of scope (Stage 3B and later)
+## 7. Out of scope
 
-The redesigned room-detail timeline, accounts, location or Bluetooth features, and any new backend infrastructure.
+Accounts, location or Bluetooth features, and any new backend infrastructure.
+
+## 8. Room detail screen (Stage 3B)
+
+Every room entry (recommendation card, favorite row, building list) opens **one** full-screen detail view. It is a modal
+dialog: the page behind it is inert and does not scroll, focus moves into it and returns to the opener on close, Escape closes
+the selected entry first and the screen second, and the phone's back button closes it (`#room` history entry).
+
+Layout, top to bottom (the first three parts stay fixed, the rest scrolls):
+1. **Header** — back button, room code, building · campus, favorite star.
+2. **Current status** — badge **Free / Booked / Blocked / Unknown / Loading** with its sentence ("Free until 14:00"), **Next change**
+   ("At 14:00 it becomes booked (until 16:00)"), and a **freshness line** with a Refresh button ("Updated 10:02 · 3 min ago",
+   "Stale — updated 09:56 (14 min ago)", "Rate limited — retrying later").
+3. **Day navigation** — previous / next day, label with a Today tag, a Today button, and the seven days of the week.
+4. **Timeline** — vertical, 24 hours, **72 px per hour** (1.2 px/min). Free, Booked and Blocked intervals are drawn with heights
+   exactly proportional to their real durations; hourly labels and boundaries; a red **Now** line on today; the first view is
+   positioned around now (today) or 08:00 (other days). Free time is a green block, bookings are red-brown, blocks are hatched
+   amber; a legend and text labels mean colour is never the only signal.
+5. **Entries list** — an accessible alternative listing every entry (a collapsed `details` element).
+6. **Details card** — tapping a booking or block (or a list row) shows its type, time range, real duration, title and course
+   number, plus notes ("ETH marks this event as not taking place; still shown as blocking", type-8 blocks "are shown as
+   published and are not treated as opening hours"). A second tap, the × button or Escape closes it.
+
+Rules:
+- The screen opens immediately from the cache. A fresh week needs **no request**; a missing, stale or unreadable one needs one.
+- Moving between days of a cached week needs no request; a week that was never loaded needs one, and shows "Loading schedule…"
+  with **no free time** while it loads.
+- **Unknown or failed schedules are never drawn as free:** an error, rate limit, unverified or unreadable (malformed) schedule
+  shows a status of Unknown, an explanation and a retry (paused during an ETH cooldown) and no timeline at all.
+- **Stale data is never shown as confirmed:** the badge reads "Free · Stale", free time is hatched and labelled "Free · stale",
+  and a warning note and the freshness line explain it. Data older than one hour is not shown.
+- Overlapping entries are placed in side-by-side lanes; adjacent entries (end = start, half-open) keep the full width; the
+  merged blockers decide where free time is (no phantom gaps).
+- **Daylight saving:** the axis is real elapsed time since local midnight: 23 hours (spring forward, no 02:00 label) or 25 hours
+  (fall back, the repeated hour is labelled "02:00 2nd"). ETH timestamps have no offset, so an entry inside the repeated hour is
+  drawn in its first occurrence (documented limitation).
+- No opening hours are assumed: type-8 blocks are drawn as published blocks only. With no published block, a room at 03:00 is
+  "Free" (no published entry) and the screen says Free never means empty, open or accessible.
+- No duration has to be chosen anywhere.

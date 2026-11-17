@@ -112,7 +112,7 @@ async function phase1() {
     check('keyboard: Enter on a focused mode button activates it', await b.ev(`document.querySelector('.mode-btn[aria-pressed=true]').dataset.mode`) === 'soon');
     await b.ev(`document.querySelector('.mode-btn[data-mode=now]').focus()`); await b.press(' '); await settle(b, 150);
     check('keyboard: Space activates a mode button; all interactive elements are real buttons or links', await b.ev(`document.querySelector('.mode-btn[aria-pressed=true]').dataset.mode`) === 'now'
-      && await b.ev(`![...document.querySelectorAll('[data-toggle-card],[data-mode],[data-campus],[data-favorite]')].some(e=>!['BUTTON','A'].includes(e.tagName))`));
+      && await b.ev(`![...document.querySelectorAll('[data-open-detail],[data-mode],[data-campus],[data-favorite]')].some(e=>!['BUTTON','A'].includes(e.tagName))`));
 
     // second batch
     const before = totalAlloc(st);
@@ -183,11 +183,11 @@ async function phase1() {
     await b.ev(`document.querySelector('#favorites-list [data-favorite]').click()`); await settle(b, 150);
     check('with no favorites the section is hidden again', await b.ev(`document.getElementById('favorites-section').hidden`));
 
-    // card detail
-    await b.ev(`document.querySelector('#recommendations .rec-main').click()`); await settle(b, 150);
-    check('tapping a recommendation opens the existing room detail (timeline, unreserved intervals, official link)', await b.ev(`(()=>{const d=document.querySelector('#recommendations .room-details');return Boolean(d&&d.querySelector('.timeline-bar')&&d.querySelector('.source-link')&&/Unreserved intervals/.test(d.textContent));})()`));
-    check('the opened card exposes aria-expanded=true', await b.ev(`document.querySelector('#recommendations .rec-main').getAttribute('aria-expanded')`) === 'true');
-    await b.ev(`document.querySelector('#recommendations .rec-main').click()`);
+    // detail screen (covered in depth in phase 7): opens from a card, closes again
+    await b.ev(`document.querySelector('#recommendations .rec-main').click()`); await settle(b, 200);
+    check('tapping a recommendation opens the room-detail screen; closing returns to the home screen', await b.ev(`!document.getElementById('room-detail').hidden&&document.querySelector('.app-shell').inert===true`));
+    await click(b, '#rd-close'); await settle(b, 200);
+    check('the home screen is usable again after closing the detail screen', await b.ev(`document.getElementById('room-detail').hidden&&document.querySelector('.app-shell').inert===false`));
 
     // browse is preserved
     await b.ev(`document.getElementById('search-btn').click()`); await settle(b, 150);
@@ -198,7 +198,8 @@ async function phase1() {
     await b.ev(`document.querySelector('#room-results .building-head').click()`); await settle(b, 200);
     check('browse: tapping a building expands its rooms', await b.ev(`document.querySelectorAll('#room-results .room-entry').length>0`));
     await b.ev(`document.querySelector('#room-results .room-main').click()`); await settle(b, 200);
-    check('browse: a room expands to its timetable', await b.ev(`Boolean(document.querySelector('#room-results .room-details'))`));
+    check('browse: tapping a room opens its detail screen', await b.ev(`!document.getElementById('room-detail').hidden`));
+    await click(b, '#rd-close'); await settle(b, 150);
     const day = await b.ev(`(()=>{const x=[...document.querySelectorAll('.day-btn')].find(d=>!d.classList.contains('today'));x.click();return x.dataset.day;})()`);
     check('browse: the date strip changes the day', await b.ev(`document.querySelector('.day-btn.selected').dataset.day`) === day);
     check('home recommendations are independent of the browsed day (the home clock still shows today)', /^Zurich · 10:0\d$/.test(await text(b, '#home-time')));
@@ -304,8 +305,9 @@ async function phase4() {
     await b.screenshot(path.join(shots, 'home-favorites-over-budget.png'));
     // deliberate interaction 1: open one unchecked favorite
     await b.ev(`[...document.querySelectorAll('#favorites-list .fav-entry')].find(e=>e.querySelector('.status-text').textContent==='Not checked yet').querySelector('.fav-main').click()`);
-    await b.waitFor(`document.querySelectorAll('#favorites-list .status-text').length&&![...document.querySelectorAll('#favorites-list .status-text')].filter(e=>e.textContent==='Not checked yet').length<3`, 8000);
-    await sleep(1200);
+    await b.waitFor(`!document.getElementById('room-detail').hidden&&document.querySelector('#rd-timeline .tl')`, 8000);
+    await sleep(800);
+    await click(b, '#rd-close'); await sleep(300);
     st = await stats();
     check('opening an unchecked favorite loads exactly that one room (+1 request)', totalAlloc(st) === 7 && (await apiCalls(b)) === 7, JSON.stringify(st.alloc));
     // deliberate interaction 2: the bounded "Check favorites" action
@@ -344,11 +346,12 @@ async function phase5() {
     await b.waitFor(`performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/allocations')).length>=6`, 20000);
     await sleep(1500);
     check('answers that were 15 min old at the source are NOT recommendations, although the browser cache was just populated', (await cards(b)).length === 0, JSON.stringify(await cards(b)));
-    check('the coverage line says the rooms are being refreshed (stale), not "checked"', /Refreshing 6 rooms/.test(await text(b, '#coverage-text')), await text(b, '#coverage-text'));
+    check('the coverage line says the data is older than 10 minutes (stale) and offers a manual refresh — it does not claim a refresh is running', /older than 10 minutes/.test(await text(b, '#coverage-text')) && await text(b, '#refresh-stale') === 'Refresh 6 stale rooms', `${await text(b, '#coverage-text')} | ${await text(b, '#refresh-stale')}`);
     const apiBefore = await apiCalls(b);
     await sleep(3500);
     check('no refetch storm: stale-on-arrival data is not re-requested straight away', (await apiCalls(b)) === apiBefore && (await stats()).total === 6, `${apiBefore} → ${await apiCalls(b)}`);
-    await b.ev(`window.__oldAgeMs=0`); await click(b, '#refresh-btn');
+    await b.ev(`window.__oldAgeMs=0`); await click(b, '#refresh-stale');
+    await b.waitFor(`performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/allocations')).length>=12`, 15000);
     check('after a genuine refresh (source age ~0) the recommendations appear', await b.waitFor(`document.querySelectorAll('#recommendations .rec-card').length>0`, 15000), await text(b, '#coverage-text'));
     check('the refresh cost one request per room in the browser and was absorbed by the server cache (ETH asked once per room)', (await apiCalls(b)) === 12 && (await stats()).total === 6, `api=${await apiCalls(b)} eth=${(await stats()).total}`);
     // source age keeps growing locally: the same record turns stale without any new response
@@ -356,7 +359,7 @@ async function phase5() {
     await b.setClock(11);
     await b.nav(stack.url);
     await b.waitFor(`document.querySelector('#coverage-text').textContent.length>0`, 5000); await sleep(800);
-    check('11 minutes later the cached answers are stale and no longer recommended (age measured from the source, not from the cache write)', (await cards(b)).length === 0 || /Refreshing|refreshing/.test(await text(b, '#coverage-text') + await text(b, '#coverage-detail')), await text(b, '#coverage-text'));
+    check('11 minutes later the cached answers are stale and no longer recommended (age measured from the source, not from the cache write)', (await cards(b)).length === 0 && /older than 10 minutes/.test(await text(b, '#coverage-text')), await text(b, '#coverage-text'));
   } finally { b.cleanup(); stack.stop(); }
 }
 
@@ -431,7 +434,263 @@ async function phase6() {
   } finally { b.cleanup(); stack.stop(); }
 }
 
-try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); }
+// ---------------------------------------------------------------- phase 7
+const PX = 1.2; // px per minute of the timeline (docs/UX_SPEC.md §8)
+async function phase7() {
+  console.log('\n# Phase 7: room detail screen and interactive timeline');
+  const stack = await startStack(); const b = await openBrowser('p7');
+  const port = new URL(stack.url).port - 5000;
+  const stats = async () => (await fetch(`http://127.0.0.1:${port}/__stats`)).json();
+  const lat = selector => b.ev(`(async()=>{const el=document.querySelector(${JSON.stringify(selector)});const t0=performance.now();el.click();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return performance.now()-t0;})()`);
+  const detailOpen = () => b.ev(`!document.getElementById('room-detail').hidden`);
+  const title = () => text(b, '#rd-title');
+  const openFromSearch = async code => {
+    await b.ev(`(()=>{const i=document.getElementById('room-search');i.value=${JSON.stringify(code)};i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await b.waitFor(`document.querySelector('#room-results [data-open-detail=${JSON.stringify(code)}]')`, 8000);
+    await b.ev(`document.querySelector('#room-results [data-open-detail=${JSON.stringify(code)}]').click()`);
+    await b.waitFor(`!document.getElementById('room-detail').hidden&&document.getElementById('rd-title').textContent===${JSON.stringify(code)}`, 5000);
+  };
+  const close = async () => { await click(b, '#rd-close'); await sleep(150); };
+  const blocksDom = () => b.ev(`JSON.stringify([...document.querySelectorAll('#rd-timeline .tl-block')].map(e=>({kind:e.classList.contains('tl-booked')?'booked':'blocked',top:parseFloat(e.style.top),h:parseFloat(e.style.height),label:e.getAttribute('aria-label')})))`).then(JSON.parse);
+  const freeDom = () => b.ev(`JSON.stringify([...document.querySelectorAll('#rd-timeline .tl-free')].map(e=>({top:parseFloat(e.style.top),h:parseFloat(e.style.height),label:e.textContent,aria:e.getAttribute('aria-label')})))`).then(JSON.parse);
+  const near = (a, bb) => Math.abs(a - bb) <= 0.6;
+  try {
+    await b.initScript(`if(!localStorage.getItem('openroom-prefs-v1'))localStorage.setItem('openroom-prefs-v1',JSON.stringify({favorites:['HG E 21','HG E 22','HG E 23']}));
+window.__cls=0;try{new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__cls+=e.value}).observe({type:'layout-shift',buffered:true});}catch{}
+(()=>{const f=window.fetch;window.fetch=async(...a)=>{const r=await f(...a);if(String(a[0]).includes('/api/allocations')&&window.__oldAgeMs){const j=await r.clone().json();j.ageMs=window.__oldAgeMs;j.fetchedAt=new Date(Date.now()-window.__oldAgeMs).toISOString();return new Response(JSON.stringify(j),{status:r.status,headers:r.headers});}return r;};})();`);
+    await b.nav(stack.url);
+    await b.waitFor(`document.querySelectorAll('#recommendations .rec-card').length>0&&/based on 6/.test(document.getElementById('coverage-text').textContent)`, 20000);
+    await sleep(1500);
+    let st = await stats();
+    const sc = st.scenarios; // room -> scenario for the 3 discovery rooms
+    const s0 = Object.keys(sc).find(c => sc[c] === 'S0'), s1 = Object.keys(sc).find(c => sc[c] === 'S1'), s2 = Object.keys(sc).find(c => sc[c] === 'S2');
+    check('setup: 3 favorites + 3 discovery rooms loaded with exactly 6 schedule requests', totalAlloc(st) === 6 && s0 && s1 && s2, JSON.stringify({alloc: st.alloc, sc}));
+    const apiN = () => apiCalls(b);
+
+    // ---- entry point 1: recommendation card
+    const a0 = await apiN(), st0 = (await stats()).total;
+    const cardCode = (await cards(b))[0].code;
+    const t0 = Date.now();
+    await b.ev(`document.querySelector('#recommendations .rec-main').click()`);
+    const opened = await b.waitFor(`!document.getElementById('room-detail').hidden&&document.querySelector('#rd-timeline .tl')`, 3000);
+    const openMs = Date.now() - t0;
+    check(`opens from a recommendation card (${cardCode}) with the cached schedule, no loading state`, opened && await title() === cardCode, `${await title()} vs ${cardCode}`);
+    check('opening a room with fresh cached data makes NO request (browser or ETH)', (await apiN()) === a0 && (await stats()).total === st0, `${a0} → ${await apiN()}`);
+    check('dialog semantics: role=dialog, aria-modal, labelled by the room code; background inert; page scroll locked; focus moved into the dialog', await b.ev(`(()=>{const d=document.getElementById('room-detail');return d.getAttribute('role')==='dialog'&&d.getAttribute('aria-modal')==='true'&&document.getElementById(d.getAttribute('aria-labelledby')).textContent===document.getElementById('rd-title').textContent&&document.querySelector('.app-shell').inert&&document.body.classList.contains('rd-open')&&document.activeElement.id==='rd-close';})()`));
+    check('history: opening pushes #room so the phone back button closes the screen', await b.ev(`location.hash`) === '#room');
+    await b.ev(`history.back()`); await sleep(300);
+    check('back button closes the detail screen and focus returns to the card that opened it', !(await detailOpen()) && await b.ev(`document.activeElement.getAttribute('data-open-detail')`) === cardCode && await b.ev(`location.hash`) === '');
+
+    // ---- entry point 2: favorites
+    await b.ev(`document.querySelector('#favorites-list [data-open-detail="HG E 21"]').click()`); await sleep(300);
+    check('opens from the Favorites list (verified-empty room: free, with the empty schedule drawn as free time)', await title() === 'HG E 21' && /^Free/.test(await text(b, '#rd-status .rd-badge')) && (await blocksDom()).length === 0 && (await freeDom()).length === 1);
+    await close();
+
+    // ---- entry point 3: building list (browse); room S1 has bookings 09–11 and 14–16 plus night blocks
+    const a1 = (await stats()).alloc[s1];
+    await openFromSearch(s1);
+    check(`opens from a building list (search auto-expands the building): ${s1}`, await title() === s1);
+    check('...and opening it requested nothing for that room', (await stats()).alloc[s1] === a1, `${a1} → ${(await stats()).alloc[s1]}`);
+    const stNow = await text(b, '#rd-status');
+    check('current status at 10:00 is "Booked until 11:00" with the next change, a freshness line and a refresh button', /Booked/.test(stNow) && /Booked until 11:00/.test(stNow) && /At 11:00 it becomes free/.test(stNow) && /Updated (09:59|10:00)/.test(stNow) && await b.ev(`Boolean(document.getElementById('rd-refresh'))`), stNow);
+    check('day navigation shows "Wed 18 Nov" with a Today tag', /Wed 18 Nov/.test(await text(b, '#rd-daybar')) && /Today/.test(await text(b, '#rd-daybar .rd-today-tag')));
+
+    // ---- timeline geometry
+    const blocks = await blocksDom(), free = await freeDom();
+    const wantBlocks = [[0, 480, 'blocked'], [540, 660, 'booked'], [840, 960, 'booked'], [1320, 1440, 'blocked']];
+    const wantFree = [[480, 540], [660, 840], [960, 1320]];
+    check('timeline: 4 blocks with heights and positions proportional to their durations (1.2 px/min)', blocks.length === 4 && wantBlocks.every(([a, e, k], i) => blocks[i].kind === k && near(blocks[i].top, a * PX) && near(blocks[i].h, (e - a) * PX)), JSON.stringify(blocks));
+    check('timeline: free time fills exactly the gaps between blocks', free.length === 3 && wantFree.every(([a, e], i) => near(free[i].top, a * PX) && near(free[i].h, (e - a) * PX)), JSON.stringify(free));
+    check('timeline: blocks and free time tile the 24-hour axis (1728 px) with nothing missing or overlapping', near([...blocks, ...free].reduce((sum, x) => sum + x.h, 0), 1440 * PX) && await b.ev(`parseFloat(document.querySelector('#rd-timeline .tl').style.height)`) === 1728);
+    check('timeline: 25 hourly labels from 00:00 to 24:00 with boundaries', await b.ev(`JSON.stringify([...document.querySelectorAll('#rd-timeline .tl-tick-label')].map(e=>e.textContent))`) === JSON.stringify(Array.from({length: 25}, (_, i) => `${String(i).padStart(2, '0')}:00`)));
+    check('timeline: the current-time indicator sits at 10:00 (720 px) and is labelled', await b.ev(`parseFloat(document.getElementById('tl-now').style.top)`) === 720 && /Now/.test(await text(b, '#tl-now')));
+    check('timeline: free, booked and blocked are distinguishable by text, not only by colour (legend + labels)', /Free/.test(await text(b, '.rd-legend')) && /Booked/.test(await text(b, '.rd-legend')) && /Blocked/.test(await text(b, '.rd-legend')) && free.every(f => /^Free \d\d:\d\d–\d\d:\d\d$/.test(f.label.trim())) && blocks.every(x => /^(Booked|Blocked) /.test(x.label)));
+    check('timeline: the first view is positioned around the current time (not at midnight)', await b.ev(`document.getElementById('rd-scroll').scrollTop`) > 400);
+    await b.screenshot(path.join(shots, 'detail-booked-now.png'));
+
+    // ---- booking detail expansion
+    await click(b, '#rd-timeline .tl-booked'); await sleep(150);
+    const card = await text(b, '#rd-card');
+    check('tapping a booking shows course information: type, time, duration, title and course number', !(await b.ev(`document.getElementById('rd-card').hidden`)) && /Booked/.test(card) && /09:00–11:00/.test(card) && /2 h/.test(card) && /Lecture/.test(card) && /Course 1/.test(card), card);
+    check('the selected booking is marked (aria-pressed) and a second tap closes the details', await b.ev(`document.querySelector('#rd-timeline .tl-booked').getAttribute('aria-pressed')`) === 'true');
+    await b.screenshot(path.join(shots, 'detail-booking-card.png'));
+    await click(b, '#rd-timeline .tl-booked'); await sleep(120);
+    check('...second tap on the same booking closes the details', await b.ev(`document.getElementById('rd-card').hidden`));
+    await click(b, '#rd-timeline .tl-blocked'); await sleep(120);
+    const bcard = await text(b, '#rd-card');
+    check('a blocked interval is explained without claiming opening hours (type 8 shown as published)', /Blocked/.test(bcard) && /type 8/.test(bcard) && /not treated as the building's opening hours/.test(bcard), bcard);
+    await b.press('Escape'); await sleep(120);
+    check('Escape closes the details first, the screen second', await b.ev(`document.getElementById('rd-card').hidden`) && await detailOpen());
+    await b.ev(`document.querySelector('#rd-list summary').click()`); await sleep(100);
+    await b.ev(`document.querySelectorAll('#rd-list .rd-row')[1].click()`); await sleep(120);
+    check('the accessible list of entries opens the same details (9:00 booking is the 2nd row)', /09:00–11:00/.test(await text(b, '#rd-card')) && await b.ev(`document.querySelectorAll('#rd-list .rd-row').length`) === 4);
+    await b.press('Escape'); await sleep(100);
+
+    // ---- layout, touch targets, keyboard at 375 px
+    check('no horizontal scrolling in the detail screen or on the page at 375 px', await b.ev(`(()=>{const s=document.getElementById('rd-scroll'),d=document.getElementById('room-detail');return s.scrollWidth<=s.clientWidth&&d.scrollWidth<=d.clientWidth&&document.documentElement.scrollWidth<=window.innerWidth;})()`));
+    const small = await b.ev(`JSON.stringify([...document.querySelectorAll('#room-detail button, #room-detail summary')].filter(e=>e.getClientRects().length&&!e.classList.contains('tl-block')).map(e=>{const r=e.getBoundingClientRect();return {c:(e.id||e.className||e.tagName),w:Math.round(r.width),h:Math.round(r.height)}}).filter(x=>x.h<44||x.w<44))`);
+    check('every control in the detail screen is at least 44×44 px (timeline blocks keep their exact proportional height and get a larger touch area)', small === '[]', small);
+    check('timeline blocks are keyboard-reachable buttons with accessible names', await b.ev(`[...document.querySelectorAll('#rd-timeline .tl-block')].every(e=>e.tagName==='BUTTON'&&/^(Booked|Blocked) \\d\\d:\\d\\d–/.test(e.getAttribute('aria-label')))`));
+    await b.ev(`document.querySelector('#rd-timeline .tl-booked').focus()`); await b.press('Enter'); await sleep(120);
+    check('keyboard: Enter on a focused booking opens its details', !(await b.ev(`document.getElementById('rd-card').hidden`)));
+    await b.press('Escape'); await sleep(100);
+    check('keyboard: focus stays inside the dialog while it is open (background is inert)', await (async () => {
+      await b.ev(`document.getElementById('rd-close').focus()`);
+      for (let i = 0; i < 14; i++) { await b.press('Tab'); if (!await b.ev(`document.getElementById('room-detail').contains(document.activeElement)||document.activeElement===document.body`)) return false; }
+      return true;
+    })());
+
+    // ---- date navigation reuses the cached week
+    const aDay0 = await apiN(), stDay0 = (await stats()).alloc[s1];
+    await click(b, '#rd-next'); await sleep(200);
+    check('date navigation: next day shows "Thu 19 Nov" without a current-time line, from the cached week (no request)', /Thu 19 Nov/.test(await text(b, '#rd-daybar')) && await b.ev(`!document.getElementById('tl-now')`) && (await apiN()) === aDay0 && (await stats()).alloc[s1] === stDay0);
+    check('another day of the same cached week is drawn from the same record (the mock publishes the same entries daily): 4 blocks, 3 free gaps', (await blocksDom()).length === 4 && (await freeDom()).length === 3);
+    await b.ev(`document.querySelector('[data-rd-day]').click()`); await sleep(150);
+    check('week strip jumps to Monday 16 Nov (cached)', /Mon 16 Nov/.test(await text(b, '#rd-daybar')) && (await apiN()) === aDay0);
+    await click(b, '#rd-today'); await sleep(150);
+    check('Today returns to today with the current-time line at 720 px', /Today/.test(await text(b, '#rd-daybar')) && await b.ev(`parseFloat(document.getElementById('tl-now').style.top)`) === 720);
+    stack.mock.setDelay(900);
+    const aWeek0 = await apiN();
+    for (let i = 0; i < 5; i++) await click(b, '#rd-next'); // Mon 23 Nov: a different week
+    await sleep(150);
+    const loadingView = await b.ev(`JSON.stringify({text:document.getElementById('rd-timeline').innerText,free:document.querySelectorAll('#rd-timeline .tl-free').length,blocks:document.querySelectorAll('#rd-timeline .tl-block').length})`).then(JSON.parse);
+    check('a week that is not cached shows "Loading schedule…" with NO free time while it loads', /Loading schedule/.test(loadingView.text) && loadingView.free === 0 && loadingView.blocks === 0, JSON.stringify(loadingView));
+    await b.waitFor(`document.querySelector('#rd-timeline .tl')`, 8000);
+    stack.mock.setDelay(0);
+    check('crossing into a new week costs exactly one request; its timeline then appears', (await apiN()) === aWeek0 + 1 && /Mon 23 Nov/.test(await text(b, '#rd-daybar')), `${aWeek0} → ${await apiN()}`);
+    for (let i = 0; i < 5; i++) await click(b, '#rd-prev');
+    for (let i = 0; i < 5; i++) await click(b, '#rd-next');
+    await sleep(200);
+    check('going back and forth between weeks afterwards reuses the cache (no further request)', (await apiN()) === aWeek0 + 1);
+    await click(b, '#rd-today'); await sleep(100);
+
+    // ---- cached reopen
+    await close();
+    const aRe = await apiN();
+    await b.ev(`document.querySelector('#room-results [data-open-detail=${JSON.stringify(s1)}]').click()`); await sleep(250);
+    check('closing and reopening the same room uses the cache (no request) and resets to today', await title() === s1 && (await apiN()) === aRe && /Today/.test(await text(b, '#rd-daybar')));
+    await close();
+
+    // ---- performance of the screen
+    const clsBefore = await b.ev(`window.__cls`);
+    await b.ev(`window.__clsSources=[];new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)window.__clsSources.push({v:e.value,s:e.sources.map(x=>x.node&&(x.node.id||x.node.className||x.node.nodeName))});}).observe({type:'layout-shift',buffered:false});`);
+    const openLat = [], dayLat = [], pickLat = [];
+    for (let i = 0; i < 3; i++) {
+      openLat.push(await lat(`#room-results [data-open-detail=${JSON.stringify(s1)}]`));
+      dayLat.push(await lat('#rd-next')); dayLat.push(await lat('#rd-prev'));
+      pickLat.push(await lat('#rd-timeline .tl-booked')); pickLat.push(await lat('#rd-timeline .tl-booked'));
+      await close();
+    }
+    const med = a => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+    metrics.detail = {openCachedMs: Math.round(med(openLat)), openFirstMs: openMs, dayChangeMs: Math.round(Math.max(...dayLat)), selectBookingMs: Math.round(Math.max(...pickLat)), cls: Number(((await b.ev(`window.__cls`)) - clsBefore).toFixed(4))};
+    check(`open (cached): median ${metrics.detail.openCachedMs} ms, day change max ${metrics.detail.dayChangeMs} ms, booking tap max ${metrics.detail.selectBookingMs} ms — all < 100 ms to the next painted frame`, Math.max(...openLat) < 100 && Math.max(...dayLat) < 100 && Math.max(...pickLat) < 100, JSON.stringify({openLat, dayLat, pickLat}));
+    check(`no layout shift caused by opening the screen or moving through days (CLS ${metrics.detail.cls})`, metrics.detail.cls < 0.1, JSON.stringify(await b.ev(`window.__clsSources`)));
+
+    // ---- invalid / failing rooms: never free
+    await b.ev(`document.querySelector('#favorites-list [data-open-detail="HG E 23"]').click()`); await sleep(300);
+    const failing = await b.ev(`JSON.stringify({badge:document.querySelector('#rd-status .rd-badge').textContent,t:document.getElementById('rd-timeline').innerText,free:document.querySelectorAll('#rd-timeline .tl-free').length,blocks:document.querySelectorAll('#rd-timeline .tl-block').length,retry:Boolean(document.getElementById('rd-retry'))})`).then(JSON.parse);
+    check('a failed schedule (ETH 500) shows Unknown, "availability is unknown" and a retry — never free time', failing.badge === 'Unknown' && /Schedule unavailable/.test(failing.t) && /availability is unknown/.test(failing.t) && failing.free === 0 && failing.blocks === 0 && failing.retry, JSON.stringify(failing));
+    await b.screenshot(path.join(shots, 'detail-unknown.png'));
+    await close();
+    await b.ev(`document.querySelector('#favorites-list [data-open-detail="HG E 22"]').click()`); await sleep(300);
+    check('an unknown room (ETH answered 200 []) shows "Room not found at ETH", never free time', /Room not found at ETH/.test(await text(b, '#rd-timeline')) && await b.ev(`document.querySelectorAll('#rd-timeline .tl-free').length`) === 0 && await text(b, '#rd-status .rd-badge') === 'Unknown');
+    await close();
+
+    // ---- stale data: visibly stale, never "freshly confirmed free"
+    await openFromSearch(s0);
+    check('before: a fresh free room shows the plain "Free" badge and an unhatched timeline', await text(b, '#rd-status .rd-badge') === 'Free' && await b.ev(`!document.querySelector('#rd-timeline .tl-stale')`));
+    await b.ev(`window.__oldAgeMs=900000`);
+    await click(b, '#rd-refresh'); await sleep(900);
+    const stale = await b.ev(`JSON.stringify({badge:document.querySelector('#rd-status .rd-badge').textContent,fresh:document.querySelector('.rd-fresh').innerText,cls:Boolean(document.querySelector('#rd-timeline .tl-stale')),note:Boolean(document.querySelector('.rd-stale-note')),labels:[...document.querySelectorAll('#rd-timeline .tl-free')].map(e=>e.getAttribute('aria-label'))})`).then(JSON.parse);
+    check('15-minute-old ETH data: badge "Free · Stale", "Stale — updated …" line, hatched free time labelled stale, and a warning note', stale.badge === 'Free · Stale' && /^Stale — updated/.test(stale.fresh) && stale.cls && stale.note && stale.labels.length > 0 && stale.labels.every(l => /stale/i.test(l)), JSON.stringify(stale));
+    await b.screenshot(path.join(shots, 'detail-stale.png'));
+    await b.ev(`window.__oldAgeMs=0`);
+    await click(b, '#rd-refresh'); await sleep(900);
+    check('after a genuine refresh the badge is plain "Free" again and the stale styling is gone', await text(b, '#rd-status .rd-badge') === 'Free' && await b.ev(`!document.querySelector('#rd-timeline .tl-stale')&&!document.querySelector('.rd-stale-note')`));
+    await close();
+
+    // ---- clock moves, no request: the current-time line recalculates locally
+    await sleep(700);
+    await b.setClock(6);
+    await b.nav(stack.url);
+    await b.waitFor(`document.querySelector('#recommendations .rec-card')`, 8000);
+    const aClock = await apiN(), eClock = (await stats()).total;
+    await openFromSearch(s1); await sleep(200);
+    check('6 minutes later (reload): the current-time line moved to 10:06 (727.2 px) from cached data without a request', await b.ev(`parseFloat(document.getElementById('tl-now').style.top)`) === 727.2 && (await apiN()) === aClock && (await stats()).total === eClock, `${await b.ev(`document.getElementById('tl-now').style.top`)}`);
+
+    // ---- rate limit while opening an unchecked room
+    await close();
+    const lastCode = catalog.filter(r => r.campus === 'Zentrum').at(-1).code;
+    stack.mock.setRate429(true);
+    await openFromSearch(lastCode); await sleep(1200);
+    const limited = await b.ev(`JSON.stringify({badge:document.querySelector('#rd-status .rd-badge').textContent,t:document.getElementById('rd-timeline').innerText,free:document.querySelectorAll('#rd-timeline .tl-free').length,retryDisabled:document.getElementById('rd-retry')?.disabled})`).then(JSON.parse);
+    check('opening an unchecked room during an ETH rate limit shows "Rate limited", a paused retry and never free time', limited.badge === 'Unknown' && /Rate limited/.test(limited.t) && limited.free === 0 && limited.retryDisabled === true, JSON.stringify(limited));
+    stack.mock.setRate429(false);
+    check('no console errors in phase 7', b.errors.filter(e => !/Failed to load resource|429|503/.test(e)).length === 0, b.errors.join(' | '));
+  } finally { b.cleanup(); stack.stop(); }
+}
+
+// ---------------------------------------------------------------- phase 8
+async function phase8() {
+  console.log('\n# Phase 8: when requests happen — no polling, foreground revalidation within the budget, manual refresh');
+  const byCode = (a, bb) => a.localeCompare(bb, undefined, {numeric: true});
+  const zen = catalog.filter(r => r.campus === 'Zentrum').slice(0, 5).map(r => r.code);
+  const hon = catalog.filter(r => r.campus === 'Hönggerberg').slice(0, 4).map(r => r.code);
+  const stack = await startStack(); const b = await openBrowser('p8');
+  const port = new URL(stack.url).port - 5000;
+  const stats = async () => (await fetch(`http://127.0.0.1:${port}/__stats`)).json();
+  const setHidden = hidden => b.ev(`(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>${hidden}});document.dispatchEvent(new Event('visibilitychange'));})()`);
+  try {
+    await b.initScript(`if(!localStorage.getItem('openroom-prefs-v1'))localStorage.setItem('openroom-prefs-v1',JSON.stringify({favorites:${JSON.stringify([...zen, ...hon])}}));`);
+    await b.nav(stack.url);
+    await b.waitFor(`document.querySelectorAll('#favorites-list .status-loading').length===0`, 20000);
+    await sleep(1200);
+    await click(b, '#check-favorites'); await b.waitFor(`document.getElementById('check-favorites').hidden`, 8000); await sleep(1200);
+    let n = await apiCalls(b);
+    check('setup: 9 favorites loaded (6 initial requests + 3 on a deliberate tap)', n === 9, `api=${n}`);
+    // -- no polling: the minute tick only recalculates
+    await b.ev(`window.__advance(12*60000)`); // the data is now 12 minutes old
+    await b.ev(`window.__intervals.forEach(i=>i.fn())`); await sleep(1500);
+    check('the minute tick (fired by hand) recalculates but makes NO request, even with expired data', (await apiCalls(b)) === 9 && (await stats()).total === 9, `${await apiCalls(b)}`);
+    await sleep(2500);
+    check('3 more seconds of an open, visible tab with expired data: still no request (no polling, no look-ahead refresh)', (await apiCalls(b)) === 9);
+    check('expired data is never recommended or shown as confirmed: no cards, rows marked Stale, coverage says older than 10 minutes with a manual refresh', (await cards(b)).length === 0 && await b.ev(`[...document.querySelectorAll('#favorites-list .status-text')].filter(e=>/Stale/.test(e.textContent)).length`) >= 5 && /older than 10 minutes/.test(await text(b, '#coverage-text')) && await text(b, '#refresh-stale') !== '', `${await text(b, '#coverage-text')} | ${await text(b, '#refresh-stale')}`);
+    await b.screenshot(path.join(shots, 'home-stale-data.png'));
+    // -- hidden tab: nothing
+    await setHidden(true); await sleep(500);
+    await b.ev(`window.__intervals.forEach(i=>i.fn())`); await sleep(800);
+    check('hidden tab: no request', (await apiCalls(b)) === 9);
+    // -- returning to the foreground revalidates, within the budget of 6
+    await setHidden(false); await sleep(2500);
+    const afterFirst = await apiCalls(b);
+    check('returning to the app revalidates expired schedules within the budget: exactly 6 of the 9 (campus favorites first)', afterFirst === 9 + 6, `api=${afterFirst}`);
+    const refreshedFirst = await b.ev(`JSON.stringify([...document.querySelectorAll('#favorites-list .fav-entry')].filter(e=>!/Stale/.test(e.querySelector('.status-text').textContent)).map(e=>e.querySelector('.rec-code').textContent))`).then(JSON.parse);
+    check('the 5 favorites of the selected campus were refreshed first', zen.every(c => refreshedFirst.includes(c)), JSON.stringify(refreshedFirst));
+    await setHidden(true); await setHidden(false); await sleep(1200);
+    check('repeated foreground events within 30 s do not request again (throttled)', (await apiCalls(b)) === afterFirst, `${afterFirst} → ${await apiCalls(b)}`);
+    await b.ev(`window.__advance(31000)`); await setHidden(true); await setHidden(false); await sleep(2500);
+    check('after 30 s the remaining 3 expired favorites are revalidated (never more than 6 per foreground event)', (await apiCalls(b)) === afterFirst + 3, `${afterFirst} → ${await apiCalls(b)}`);
+    check('ETH itself was asked only 9 times in total (the server cache absorbed the revalidations)', (await stats()).total === 9);
+    // -- manual refresh from the coverage line
+    await b.ev(`window.__advance(12*60000)`); await b.ev(`window.__intervals.forEach(i=>i.fn())`); await sleep(500);
+    const manual0 = await apiCalls(b);
+    check('manual refresh is offered when data expired ("Refresh N stale rooms", at most 6)', /^Refresh \d stale rooms?$/.test(await text(b, '#refresh-stale')) && Number((/\d/.exec(await text(b, '#refresh-stale')))[0]) <= 6, await text(b, '#refresh-stale'));
+    await click(b, '#refresh-stale'); await sleep(2500);
+    const manualDelta = (await apiCalls(b)) - manual0;
+    check(`manual refresh requested ${manualDelta} schedules (≤ 6) and the app shows fresh data again`, manualDelta >= 1 && manualDelta <= 6 && await b.ev(`document.getElementById('refresh-stale').hidden||/Refresh \\d stale/.test(document.getElementById('refresh-stale').textContent)`), `delta=${manualDelta}`);
+    // -- an open room is revalidated first
+    await b.ev(`window.__advance(12*60000)`); await sleep(300);
+    const pre = await apiCalls(b);
+    await click(b, `#favorites-list [data-open-detail="${zen[0]}"]`); await sleep(1200);
+    const detail0 = await apiCalls(b);
+    check('opening a room whose data expired requests exactly that room, once', detail0 === pre + 1, `${pre} → ${detail0}`);
+    await setHidden(true); await setHidden(false); await sleep(2500);
+    check('foreground revalidation with a room open stays within the budget of 6', (await apiCalls(b)) - detail0 <= 6, `${detail0} → ${await apiCalls(b)}`);
+    check('no console errors in phase 8', b.errors.filter(e => !/Failed to load resource/.test(e)).length === 0, b.errors.join(' | '));
+  } finally { b.cleanup(); stack.stop(); }
+}
+
+try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); await phase7(); await phase8(); }
 catch (error) { check('e2e ran to completion', false, error.stack); }
 fs.writeFileSync(path.join(shots, 'performance.json'), JSON.stringify(metrics, null, 2));
 console.log('\nPerformance (headless Chromium, local mock ETH):', JSON.stringify(metrics));

@@ -49,7 +49,7 @@
       <section class="coverage" id="coverage" aria-label="Coverage and loading">
         <div class="coverage-text" id="coverage-text" aria-live="polite"></div>
         <div class="coverage-detail" id="coverage-detail"></div>
-        <div class="coverage-actions"><button type="button" class="secondary-button" id="check-more">Check more rooms</button></div>
+        <div class="coverage-actions"><button type="button" class="secondary-button" id="refresh-stale" hidden>Refresh stale rooms</button> <button type="button" class="secondary-button" id="check-more">Check more rooms</button></div>
       </section>
 
       <section class="browse-section" aria-labelledby="browse-title">
@@ -65,6 +65,20 @@
       <div class="bottom-note"><span class="info-dot">i</span><p><strong>Free means no published reservation.</strong> It does not guarantee the room is empty, open, or available for use. This is an independent student tool, not an official ETH service.</p></div>
     </main>
     <footer><span>Made for finding a quiet place to study.</span><a href="https://ethz.ch/staffnet/de/service/raeume-gebaeude/rauminfo.html" target="_blank" rel="noopener noreferrer">ETH Rauminfo ↗</a></footer>
+  </div>
+
+  <div id="room-detail" class="room-detail" role="dialog" aria-modal="true" aria-labelledby="rd-title" hidden>
+    <header class="rd-head" id="rd-head"></header>
+    <section class="rd-status" id="rd-status" aria-live="polite" aria-label="Current status"></section>
+    <div class="rd-daybar" id="rd-daybar" role="group" aria-label="Day navigation"></div>
+    <div class="rd-scroll" id="rd-scroll">
+      <div class="rd-weekstrip" id="rd-weekstrip" role="group" aria-label="Days of this week"></div>
+      <p class="rd-summary" id="rd-summary"></p>
+      <div id="rd-timeline" class="rd-timeline-wrap"></div>
+      <div id="rd-list"></div>
+      <p class="rd-foot" id="rd-foot"></p>
+    </div>
+    <aside class="rd-card" id="rd-card" aria-label="Details of the selected entry" hidden></aside>
   </div>
 
   <dialog id="settings-dialog" class="modal"><form method="dialog" class="modal-content"><div class="modal-title-row"><h2>Settings</h2><button class="modal-close" value="close" aria-label="Close">×</button></div><p>Preferences are saved on this device.</p><label class="form-line"><span>Show only free rooms by default</span><input type="checkbox" id="settings-free-only" /></label><label class="form-line"><span>Display</span><select id="settings-clock"><option value="24">24-hour time</option><option value="12">12-hour time</option></select></label><div class="modal-info"><strong>About availability</strong><p>Availability is based on ETH's reservation schedule, not actual room occupancy.</p></div><div class="modal-info"><strong>Data source</strong><p>Publicly displayed ETH room allocations, fetched via a read-only proxy. The catalog includes a curated selection of rooms; it is not exhaustive.</p><p>Unpublished reservations, restrictions, outages, and room closures may not be represented.</p></div><button class="primary-button" value="close">Done</button></form></dialog>

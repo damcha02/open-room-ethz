@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDay, mergeBlockers, gapsOf, assessRecord, analyze, evaluateNow, evaluateSoon, evaluateRest, recommend,
   cardText, emptyMessage, orderCandidates, planBatch, favoriteRooms, summarizeCoverage, describeCoverage,
-  normalizeMode, timeLabel, formatDuration, MIN_FREE_MINUTES, SOON_WINDOW_MINUTES, planInitialLoad, needsRequest, INITIAL_REQUEST_BUDGET
+  normalizeMode, timeLabel, formatDuration, MIN_FREE_MINUTES, SOON_WINDOW_MINUTES, planInitialLoad, needsRequest, INITIAL_REQUEST_BUDGET, planRevalidation
 } from '../public/recommend.mjs';
 import {elapsedMinutes, wallToInstant} from '../public/schedule.mjs';
 
@@ -357,7 +357,7 @@ test('coverage counts and the partial-coverage sentence', () => {
   assert.equal(text.kind, 'partial');
   assert.equal(text.text, 'Recommendations based on 2 of 10 listed rooms checked.');
   assert.match(text.detail, /1 loading/);
-  assert.match(text.detail, /1 refreshing/);
+  assert.match(text.detail, /1 stale/, 'stale and idle is reported as stale, not as refreshing');
   assert.match(text.detail, /1 rate limited/);
   assert.match(text.detail, /1 unavailable/);
   assert.match(text.detail, /1 not verified/);
@@ -385,7 +385,12 @@ test('coverage with nothing checked distinguishes loading, rate limiting, unavai
   assert.equal(describeCoverage(pausedMix, {pausedUntilMs: 90_000, nowMs: 20_000}).kind, 'rateLimited');
   assert.equal(describeCoverage(coverage({}, ['AA 1', 'AA 2']), {pausedUntilMs: 90_000, nowMs: 20_000}).kind, 'rateLimited', 'an active pause alone is enough');
   assert.equal(describeCoverage(coverage({'AA 1': rec([], {roomVerified: false})}, ['AA 1'])).kind, 'unavailable');
-  assert.equal(describeCoverage(coverage({'AA 1': rec([], {cachedAt: 1})}, ['AA 1'])).kind, 'loading');
+  const idleStale = describeCoverage(coverage({'AA 1': rec([], {cachedAt: 1})}, ['AA 1']));
+  assert.equal(idleStale.kind, 'stale', 'no request is running, so it must not say "Refreshing"');
+  assert.match(idleStale.text, /older than 10 minutes/);
+  assert.match(idleStale.detail, /Refresh/);
+  const running = summarizeCoverage({rooms: catalog, attempted: new Set(['AA 1']), getRecord: () => rec([], {cachedAt: 1}), ctx: ctx(), isInflight: c => c === 'AA 1'});
+  assert.deepEqual([running.refreshing, running.stale, describeCoverage(running).kind, describeCoverage(running).text], [1, 0, 'loading', 'Refreshing 1 room…']);
   assert.equal(describeCoverage(coverage({}, [], [])).kind, 'empty');
   // a pause while some rooms are already checked is reported next to the partial coverage, not as an error
   const partial = describeCoverage(coverage({'AA 1': rec([])}, ['AA 1', 'AA 2']), {pausedUntilMs: 40_000, nowMs: 20_000});
@@ -466,4 +471,28 @@ test('initial budget: a custom budget is honoured and rooms unknown to the catal
   assert.equal(p.request.length, 2);
   assert.equal(p.attempted.length, 1, 'only catalog rooms feed the campus recommendations; discovery has no budget left');
   assert.ok(p.deferred.includes('ZZ X 9') === false, 'ZZ X 9 is requested as an other favorite');
+});
+
+// ---------- Stage 3B: foreground revalidation stays inside the request budget ----------
+test('revalidation: only expired rooms are requested, in priority order, never more than the budget', () => {
+  const c = ctx();
+  const records = {
+    open: rec([], {cachedAt: NOW_MS - 12 * 60_000}), a: rec([]), b: rec([], {cachedAt: NOW_MS - 20 * 60_000}),
+    c: {state: 'error', retryAt: NOW_MS + 9999}, d: {state: 'error', retryAt: NOW_MS - 1}, e: undefined,
+    f1: rec([], {cachedAt: NOW_MS - 15 * 60_000}), f2: rec([], {cachedAt: NOW_MS - 15 * 60_000}), f3: rec([], {cachedAt: NOW_MS - 15 * 60_000}), f4: rec([], {cachedAt: NOW_MS - 15 * 60_000})
+  };
+  const get = code => records[code];
+  assert.deepEqual(planRevalidation({candidates: ['open', 'a', 'b', 'c', 'd', 'e'], getRecord: get, ctx: c}), ['open', 'b', 'd', 'e'], 'fresh (a) and backing-off (c) rooms are skipped');
+  assert.deepEqual(planRevalidation({candidates: ['open', 'open', 'b', 'b'], getRecord: get, ctx: c}), ['open', 'b'], 'no duplicates');
+  const many = planRevalidation({candidates: ['open', 'b', 'd', 'e', 'f1', 'f2', 'f3', 'f4'], getRecord: get, ctx: c});
+  assert.equal(many.length, INITIAL_REQUEST_BUDGET, 'at most the request budget');
+  assert.deepEqual(many.slice(0, 2), ['open', 'b'], 'the open room and recommended rooms come first');
+  assert.deepEqual(planRevalidation({candidates: ['open', 'b'], getRecord: get, ctx: c, budget: 1}), ['open']);
+  assert.deepEqual(planRevalidation({candidates: ['a'], getRecord: get, ctx: c}), [], 'everything fresh: zero requests');
+  assert.deepEqual(planRevalidation({candidates: [], getRecord: get, ctx: c}), []);
+});
+test('revalidation: a stale record that is backing off after a failed refresh is not asked again yet', () => {
+  const backoff = rec([], {cachedAt: NOW_MS - 15 * 60_000, retryAt: NOW_MS + 30_000});
+  assert.deepEqual(planRevalidation({candidates: ['x'], getRecord: () => backoff, ctx: ctx()}), []);
+  assert.deepEqual(planRevalidation({candidates: ['x'], getRecord: () => ({...backoff, retryAt: NOW_MS - 1}), ctx: ctx()}), ['x']);
 });

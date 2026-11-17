@@ -40,7 +40,9 @@ function parseStamp(value) {
 export function normalizeDay(allocations, day) {
   if (!Array.isArray(allocations)) return {ok:false, reason:'malformed'};
   const blockers = [];
+  let index = -1;
   for (const entry of allocations) {
+    index++;
     if (!entry || typeof entry !== 'object') return {ok:false, reason:'malformed'};
     const s = parseStamp(entry.start), e = parseStamp(entry.end);
     if (!s || !e || s.date > e.date || (s.date === e.date && e.minute < s.minute)) return {ok:false, reason:'malformed'};
@@ -50,7 +52,13 @@ export function normalizeDay(allocations, day) {
     if (end <= start) continue;                                    // zero length: blocks nothing in [start, end)
     if (end === 1439) end = DAY_END;                               // ETH uses 23:59 as an end-of-day marker
     const type = typeof entry.type === 'number' ? entry.type : null;
-    blockers.push({start, end, type, kind: type === 2 ? 'booked' : 'blocked', overnight: type === 8 && start > 0 && end === DAY_END});
+    blockers.push({
+      id: `i${index}`, start, end, type, kind: type === 2 ? 'booked' : 'blocked', overnight: type === 8 && start > 0 && end === DAY_END,
+      title: typeof entry.title === 'string' && entry.title ? entry.title : null,
+      courseNumber: typeof entry.courseNumber === 'string' && entry.courseNumber ? entry.courseNumber : null,
+      eventIsHeld: typeof entry.eventIsHeld === 'number' ? entry.eventIsHeld : null,
+      continuesFromPrevDay: s.date < day, continuesToNextDay: e.date > day
+    });
   }
   blockers.sort((a, b) => a.start - b.start || a.end - b.end);
   return {ok:true, blockers};
@@ -299,6 +307,20 @@ export function planInitialLoad({rooms, allRooms = rooms, favorites = [], getRec
   }
   return plan;
 }
+/** Which rooms to re-request when the app returns to the foreground. `candidates` is already in priority order (the open
+ * room, rooms shown as recommendations, favorites, other checked rooms). Only rooms whose data expired (or whose backoff
+ * ended) are returned, at most `budget` of them, without duplicates: revalidation never exceeds the request budget. */
+export function planRevalidation({candidates, getRecord, ctx, budget = INITIAL_REQUEST_BUDGET}) {
+  const out = [];
+  for (const code of candidates) {
+    if (out.length >= budget) break;
+    if (out.includes(code)) continue;
+    const record = getRecord(code);
+    if (record && isFreshRecord(record, ctx.nowMs ?? Date.now())) continue; // still current: no request
+    if (needsRequest(record, ctx)) out.push(code);
+  }
+  return out;
+}
 /** Favorites from BOTH campuses, independent of campus, mode and free-only. Codes missing from the catalog are kept. */
 export function favoriteRooms(rooms, favorites) {
   const known = new Map(rooms.map(r => [r.code, r]));
@@ -307,8 +329,8 @@ export function favoriteRooms(rooms, favorites) {
 }
 
 // ---------- coverage ----------
-export function summarizeCoverage({rooms, attempted, getRecord, ctx}) {
-  const s = {total: rooms.length, attempted: 0, checked: 0, loading: 0, unavailable: 0, rateLimited: 0, unverified: 0, notFound: 0, stale: 0, malformed: 0, lastRefresh: null};
+export function summarizeCoverage({rooms, attempted, getRecord, ctx, isInflight = () => false}) {
+  const s = {total: rooms.length, attempted: 0, checked: 0, loading: 0, refreshing: 0, unavailable: 0, rateLimited: 0, unverified: 0, notFound: 0, stale: 0, malformed: 0, staleCodes: [], lastRefresh: null};
   for (const room of rooms) {
     if (!attempted.has(room.code)) continue;
     s.attempted++;
@@ -316,12 +338,15 @@ export function summarizeCoverage({rooms, attempted, getRecord, ctx}) {
     if (a.state === 'ready') {
       s.checked++;
       if (a.fetchedAt && Number.isFinite(Date.parse(a.fetchedAt)) && (!s.lastRefresh || Date.parse(a.fetchedAt) > Date.parse(s.lastRefresh))) s.lastRefresh = a.fetchedAt;
+    } else if (a.state === 'stale') {
+      // stale = older than the freshness limit and NOT being refreshed right now; refreshing = a request is in flight
+      if (isInflight(room.code)) s.refreshing++; else { s.stale++; s.staleCodes.push(room.code); }
     } else s[a.state]++;
   }
   return s;
 }
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-/** Honest coverage line. kind: empty | idle | loading | rateLimited | unavailable | partial | complete */
+/** Honest coverage line. kind: empty | idle | loading | rateLimited | unavailable | stale | partial | complete */
 export function describeCoverage(s, {pausedUntilMs = 0, nowMs = Date.now()} = {}) {
   const wait = Math.max(0, Math.ceil((pausedUntilMs - nowMs) / 1000));
   if (s.total === 0) return {kind:'empty', text:'No rooms are listed for this campus.', detail:''};
@@ -332,13 +357,15 @@ export function describeCoverage(s, {pausedUntilMs = 0, nowMs = Date.now()} = {}
       return {kind:'rateLimited', text:`ETH is limiting requests; no schedule loaded yet.${wait ? ` Retrying in about ${wait} s.` : ' Retrying shortly.'}`, detail:''};
     }
     if (s.loading > 0) return {kind:'loading', text:`Checking ${plural(s.attempted, 'room')}…`, detail:''};
+    if (s.refreshing > 0) return {kind:'loading', text:`Refreshing ${plural(s.refreshing, 'room')}…`, detail:''};
     if (s.unavailable + s.malformed > 0) return {kind:'unavailable', text:`Schedules for the ${plural(s.attempted, 'room')} checked could not be loaded. Try again later.`, detail:''};
-    if (s.stale > 0) return {kind:'loading', text:`Refreshing ${plural(s.stale, 'room')}…`, detail:''};
+    if (s.stale > 0) return {kind:'stale', text:`Schedule data is older than 10 minutes, so nothing is recommended as free.`, detail:'Refresh to see current availability.'};
     return {kind:'unavailable', text:`None of the ${plural(s.attempted, 'room')} checked could be verified at ETH.`, detail:''};
   }
   const parts = [];
   if (s.loading) parts.push(`${s.loading} loading`);
-  if (s.stale) parts.push(`${s.stale} refreshing`);
+  if (s.refreshing) parts.push(`${s.refreshing} refreshing`);
+  if (s.stale) parts.push(`${s.stale} stale`);
   if (s.rateLimited) parts.push(`${s.rateLimited} rate limited`);
   if (s.unavailable + s.malformed) parts.push(`${s.unavailable + s.malformed} unavailable`);
   if (s.unverified + s.notFound) parts.push(`${s.unverified + s.notFound} not verified`);
