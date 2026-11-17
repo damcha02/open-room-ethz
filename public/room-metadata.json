@@ -1,0 +1,2110 @@
+{
+ "schemaVersion": 1,
+ "catalogVersion": "2026-11-17",
+ "generatedAt": "2026-11-17",
+ "description": "Verified ETH room metadata for the rooms in rooms.json. A null field means ETH does not publish it for that room (or it was not verified): unknown, never a negative or positive classification.",
+ "sources": {
+  "rauminfo-list": {
+   "name": "ETH Rauminfo room list",
+   "url": "https://ethz.ch/bin/ethz/roominfo?path=/v2/rooms&lang=en",
+   "retrieved": "2026-11-17",
+   "provides": [
+    "type",
+    "seats",
+    "extraSeats",
+    "workstations",
+    "campus"
+   ],
+   "note": "One request. Seats and Workplaces are separate ETH fields; computer rooms have workplaces and no seats."
+  },
+  "rauminfo-types": {
+   "name": "ETH Rauminfo room types",
+   "url": "https://ethz.ch/bin/ethz/roominfo?path=/types&lang=en",
+   "retrieved": "2026-11-17",
+   "provides": [
+    "types"
+   ]
+  },
+  "rauminfo-details": {
+   "name": "ETH Rauminfo room details",
+   "url": "https://ethz.ch/bin/ethz/roominfo?path=/v2/rooms/<room>&lang=en",
+   "retrieved": "2026-11-17",
+   "provides": [
+    "seating",
+    "detail"
+   ],
+   "rooms": [
+    "HG D 1.1",
+    "HG D 3.1",
+    "HG E 1.1",
+    "HG E 21",
+    "HG E 27",
+    "CHN C 14",
+    "CAB G 11",
+    "GLC E 38.1",
+    "HCI D 2",
+    "HIT E 51"
+   ],
+   "note": "A representative sample only, deliberately not the whole catalog. Rooms without detail have unknown seating, equipment and accessibility."
+  },
+  "rectorate-lists": {
+   "name": "ETH Rectorate room lists (Staffnet)",
+   "urls": [
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hg.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/cab.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/chn.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/eta-etf-etz.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hci.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hil.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hit.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hph-hpv.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hcp.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume/bilder-raeume/hpk-hpl-hpt.html"
+   ],
+   "retrieved": "2026-11-17",
+   "provides": [
+    "seats (cross-check only)"
+   ],
+   "crossCheck": {
+    "compared": 122,
+    "agree": 122,
+    "disagree": 0
+   }
+  },
+  "computer-room-info": {
+   "name": "Official ETH computer-room information",
+   "status": "no official page found",
+   "retrieved": "2026-11-17",
+   "checked": [
+    "https://ethz.ch/services/en/service/rooms-and-buildings.html",
+    "https://ethz.ch/staffnet/de/service/raeume-gebaeude/rektoratsraeume.html",
+    "https://ethz.ch/services/en/it-services/",
+    "https://ethz.ch/students/en/studies/"
+   ],
+   "note": "No official page lists computer rooms, workstation counts or access rules, so ETH does not say here who may use a computer room or when."
+  }
+ },
+ "accessRules": {
+  "checkedOn": "2026-11-17",
+  "documents": [
+   {
+    "name": "Raumbenützungsreglement (RSETHZ 214.11), version of 2026-09-01",
+    "url": "https://ethz.ch/content/dam/ethz/main/eth-zurich/organisation/rechtssammlung/214.11.pdf",
+    "says": "Art. 5 lists the purposes of ordinary use (teaching, research, administration, official events). Art. 2: the unit a room is assigned to decides its use; the Rectorate decides for general teaching rooms. Self-study by students is neither listed nor prohibited."
+   },
+   {
+    "name": "Richtlinien für die Benützung der Rektoratsräume (2010)",
+    "url": "https://ethz.ch/content/dam/ethz/common/docs/weisungssammlung/files-de/rektoratsraeume-benuetzung.pdf",
+    "says": "Regulates reservations and priorities (teaching has priority; separate rules for specific rooms remain reserved). It names HG F 30, HG G 60, MM C 78.1 and HIT E 51 as rooms not used for general teaching. It does not say whether students may use unbooked rooms."
+   },
+   {
+    "name": "ETH Rauminfo room data",
+    "url": "https://ethz.ch/bin/ethz/roominfo?path=/v2/rooms/<room>&lang=en",
+    "says": "No field describes who may use a room. `responsible` and `orgunits` only name who manages it."
+   }
+  ],
+  "conclusion": "No document confirms general student access to any room and none documents a student-specific restriction, so every room is unknown. Reservation status is never used to derive access."
+ },
+ "accessDefault": {
+  "accessStatus": "unknown",
+  "accessNotes": "ETH publishes no access rule for this particular room. The general room-use regulation (RSETHZ 214.11) lists the purposes of ordinary use (teaching, research, administration, official events) and does not mention self-study by students, so it is not confirmed whether students may use the room when it has no booking.",
+  "accessSource": "https://ethz.ch/content/dam/ethz/main/eth-zurich/organisation/rechtssammlung/214.11.pdf",
+  "accessVerifiedAt": "2026-11-17"
+ },
+ "accessOverrides": {
+  "HIT E 51": {
+   "accessNotes": "Siemens-Auditorium: allocated to the Rectorate but not used for general teaching (Rectorate guidelines, Art. 1 para. 2). The documents do not say whether students may use it when it has no booking.",
+   "accessSource": "https://ethz.ch/content/dam/ethz/common/docs/weisungssammlung/files-de/rektoratsraeume-benuetzung.pdf",
+   "accessVerifiedAt": "2026-11-17"
+  },
+  "HG E 27": {
+   "accessNotes": "Computer room. No official ETH page was found that lists computer rooms or says who may use them or when (checked 2026-11-17), so access is not confirmed.",
+   "accessVerifiedAt": "2026-11-17"
+  }
+ },
+ "fieldSources": {
+  "accessStatus": "ETH regulations (see accessRules)",
+  "type": "rauminfo-list",
+  "seats": "rauminfo-list",
+  "extraSeats": "rauminfo-list",
+  "workstations": "rauminfo-list",
+  "seating": "rauminfo-details",
+  "detail": "rauminfo-details"
+ },
+ "types": {
+  "Computer": {
+   "typeCode": "3650",
+   "filter": "computer",
+   "label": "Computer room"
+  },
+  "Draw": {
+   "typeCode": "3640",
+   "filter": null,
+   "label": "Draw"
+  },
+  "Exercises": {
+   "typeCode": "3630",
+   "filter": null,
+   "label": "Exercises"
+  },
+  "Exhibition space": {
+   "typeCode": "3200",
+   "filter": null,
+   "label": "Exhibition space"
+  },
+  "Exterior event areas": {
+   "typeCode": "8180",
+   "filter": null,
+   "label": "Exterior event areas"
+  },
+  "Laboratory internship": {
+   "typeCode": "3610",
+   "filter": null,
+   "label": "Laboratory internship"
+  },
+  "Lecture hall": {
+   "typeCode": "3430",
+   "filter": "lecture",
+   "label": "Lecture hall"
+  },
+  "Meeting room": {
+   "typeCode": "2110",
+   "filter": null,
+   "label": "Meeting room"
+  },
+  "Microscopy": {
+   "typeCode": "3620",
+   "filter": null,
+   "label": "Microscopy"
+  },
+  "Multipurpose room": {
+   "typeCode": "3510",
+   "filter": null,
+   "label": "Multipurpose room"
+  },
+  "Seminars / Courses": {
+   "typeCode": "3420",
+   "filter": "seminar",
+   "label": "Seminar room"
+  },
+  "Training room": {
+   "typeCode": "3410",
+   "filter": null,
+   "label": "Training room"
+  }
+ },
+ "coverage": {
+  "rooms": 129,
+  "withType": 129,
+  "withSeats": 128,
+  "withWorkstations": 1,
+  "withSeating": 10,
+  "withDetail": 10,
+  "access": {
+   "general": 0,
+   "restricted": 0,
+   "unknown": 129
+  }
+ },
+ "rooms": {
+  "HG D 1.1": {
+   "type": "Lecture hall",
+   "seats": 158,
+   "extraSeats": 12,
+   "workstations": null,
+   "seating": "fixed",
+   "detail": {
+    "seatingLabel": "Fixed seating",
+    "examSeats": "28 (recommended)",
+    "floorArea": "165.14 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Stepped floor (lecture hall, stairs)"
+     ],
+     [
+      "Usable height",
+      "4.5 m"
+     ],
+     [
+      "Windows",
+      "not available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "electric 9 m²"
+     ],
+     [
+      "Projection screen",
+      "available"
+     ],
+     [
+      "Projection area",
+      "2"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "many"
+     ],
+     [
+      "Projector",
+      "max. resolution HD720: 1280x720"
+     ],
+     [
+      "Visualizer",
+      "Full HD  1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "2"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "2"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Additional microphones",
+      "order at ID INFRA MMT Zentrum"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Recording",
+      "self-operated camera for blackboard"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio + camera for blackboard"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Access to the stage",
+      "not wheelchair accessible"
+     ],
+     [
+      "Lift",
+      "available"
+     ],
+     [
+      "Ramp",
+      "available"
+     ],
+     [
+      "Assistive hearing device",
+      "Induction loop"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HG D 26.2"
+     ],
+     [
+      "Remark",
+      "Access only to the back row. Take the lift at the main entrance to floor D, then use the ramp."
+     ]
+    ]
+   }
+  },
+  "HG D 1.2": {
+   "type": "Lecture hall",
+   "seats": 158,
+   "extraSeats": 12,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 3.1": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "variable",
+   "detail": {
+    "seatingLabel": "variable seating",
+    "examSeats": "5 (recommended)",
+    "floorArea": "56.97 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Level floor"
+     ],
+     [
+      "Usable height",
+      "2.9 m"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "mobil 4 m²"
+     ],
+     [
+      "Board",
+      "not available"
+     ],
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Sockets",
+      "few"
+     ],
+     [
+      "Projector",
+      "not available"
+     ],
+     [
+      "Overhead projector",
+      "1"
+     ],
+     [
+      "Visualizer",
+      "not available"
+     ],
+     [
+      "HDMI connections",
+      "1"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for computer audio only 1"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Lift",
+      "available"
+     ],
+     [
+      "Ramp",
+      "available"
+     ],
+     [
+      "Height-adjustable desks with wheelchair accessibility",
+      "1"
+     ],
+     [
+      "Assistive hearing device",
+      "none"
+     ],
+     [
+      "Remark",
+      "Access only to the back row. Take the lift at the main entrance to floor D, then use the ramp."
+     ]
+    ]
+   }
+  },
+  "HG D 3.2": {
+   "type": "Lecture hall",
+   "seats": 90,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 3.3": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 5.1": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 5.2": {
+   "type": "Lecture hall",
+   "seats": 94,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 5.3": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 7.1": {
+   "type": "Lecture hall",
+   "seats": 158,
+   "extraSeats": 12,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 7.2": {
+   "type": "Lecture hall",
+   "seats": 158,
+   "extraSeats": 12,
+   "workstations": null,
+   "seating": null
+  },
+  "HG D 16.2": {
+   "type": "Lecture hall",
+   "seats": 80,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 1.1": {
+   "type": "Lecture hall",
+   "seats": 172,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "fixed",
+   "detail": {
+    "seatingLabel": "Fixed seating",
+    "examSeats": "23 (recommended)",
+    "floorArea": "175.15 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Stepped floor (lecture hall, stairs)"
+     ],
+     [
+      "Usable height",
+      "4.3 m"
+     ],
+     [
+      "Windows",
+      "not available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "electric 9 m²"
+     ],
+     [
+      "Projection screen",
+      "available"
+     ],
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "many"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "Visualizer",
+      "Full HD  1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "2"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "2"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Additional microphones",
+      "order at ID INFRA MMT Zentrum"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Recording",
+      "self-operated camera for blackboard"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio + camera for blackboard"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Access to the stage",
+      "not wheelchair accessible"
+     ],
+     [
+      "Lift",
+      "available"
+     ],
+     [
+      "Accessible seating",
+      "available in the back row"
+     ],
+     [
+      "Assistive hearing device",
+      "Induction loop"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HG D 26.2"
+     ],
+     [
+      "Other",
+      "access via E-floor"
+     ]
+    ]
+   }
+  },
+  "HG E 1.2": {
+   "type": "Lecture hall",
+   "seats": 172,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 3": {
+   "type": "Lecture hall",
+   "seats": 243,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 5": {
+   "type": "Lecture hall",
+   "seats": 255,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 7": {
+   "type": "Lecture hall",
+   "seats": 346,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 21": {
+   "type": "Seminars / Courses",
+   "seats": 46,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "variable",
+   "detail": {
+    "seatingLabel": "variable seating",
+    "examSeats": "10 (recommended)",
+    "floorArea": "78.53 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Level floor"
+     ],
+     [
+      "Usable height",
+      "4.35 m"
+     ],
+     [
+      "Windows",
+      "available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "manually adjustable 12 m²"
+     ],
+     [
+      "Flipchart",
+      "available 1 (no markers provided)"
+     ],
+     [
+      "Projection area",
+      "2"
+     ],
+     [
+      "Sockets",
+      "few"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "Visualizer",
+      "not available"
+     ],
+     [
+      "HDMI connections",
+      "2"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "1"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Recording",
+      "automatic fixed camera for blackboard"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Access to the floor",
+      "possible via goods lift"
+     ],
+     [
+      "Height-adjustable desks with wheelchair accessibility",
+      "3"
+     ],
+     [
+      "Assistive hearing device",
+      "none"
+     ]
+    ]
+   }
+  },
+  "HG E 22": {
+   "type": "Seminars / Courses",
+   "seats": 48,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 23": {
+   "type": "Seminars / Courses",
+   "seats": 38,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 27": {
+   "type": "Computer",
+   "seats": null,
+   "extraSeats": null,
+   "workstations": 39,
+   "seating": "variable",
+   "detail": {
+    "seatingLabel": "variable seating",
+    "examSeats": "35",
+    "floorArea": "184.64 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Level floor"
+     ],
+     [
+      "Usable height",
+      "2.3 m"
+     ],
+     [
+      "Windows",
+      "available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Whiteboard",
+      "fixed 3 x 2 m2 each"
+     ],
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Printer",
+      "available 2"
+     ],
+     [
+      "Sockets",
+      "many"
+     ],
+     [
+      "Projector",
+      "not available"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Access to the floor",
+      "possible via goods lift"
+     ],
+     [
+      "Height-adjustable desks with wheelchair accessibility",
+      "1"
+     ]
+    ]
+   }
+  },
+  "HG E 33.1": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 33.3": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 33.5": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG E 41": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 1": {
+   "type": "Lecture hall",
+   "seats": 346,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 3": {
+   "type": "Lecture hall",
+   "seats": 279,
+   "extraSeats": 11,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 5": {
+   "type": "Lecture hall",
+   "seats": 273,
+   "extraSeats": 12,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 7": {
+   "type": "Lecture hall",
+   "seats": 346,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 26.1": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 26.3": {
+   "type": "Seminars / Courses",
+   "seats": 46,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG F 26.5": {
+   "type": "Seminars / Courses",
+   "seats": 46,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG G 3": {
+   "type": "Lecture hall",
+   "seats": 278,
+   "extraSeats": 14,
+   "workstations": null,
+   "seating": null
+  },
+  "HG G 5": {
+   "type": "Lecture hall",
+   "seats": 279,
+   "extraSeats": 14,
+   "workstations": null,
+   "seating": null
+  },
+  "HG G 26.1": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG G 26.3": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HG G 26.5": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN C 14": {
+   "type": "Lecture hall",
+   "seats": 172,
+   "extraSeats": 10,
+   "workstations": null,
+   "seating": "fixed",
+   "detail": {
+    "seatingLabel": "Fixed seating",
+    "examSeats": "28 (recommended)",
+    "floorArea": "175.91 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Stepped floor (lecture hall, stairs)"
+     ],
+     [
+      "Usable height",
+      "2.4 m"
+     ],
+     [
+      "Windows",
+      "not available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "electric 18 m²"
+     ],
+     [
+      "Projection screen",
+      "available"
+     ],
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "few (almost none available)"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "Visualizer",
+      "Full HD  1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "2"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "4"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio only"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "directions for the visually impaired"
+     ],
+     [
+      "Access",
+      "wheelchair accessible in the back row"
+     ],
+     [
+      "Lift",
+      "available"
+     ],
+     [
+      "Accessible seating",
+      "available 3"
+     ],
+     [
+      "Assistive hearing device",
+      "Induction loop"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HG D 26.2"
+     ],
+     [
+      "Other",
+      "access to lecturer's desk possible with stair lift"
+     ]
+    ]
+   }
+  },
+  "CHN D 29": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN D 42": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN D 44": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN D 46": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN D 48": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN E 42": {
+   "type": "Seminars / Courses",
+   "seats": 60,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN E 46": {
+   "type": "Seminars / Courses",
+   "seats": 70,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN F 42": {
+   "type": "Seminars / Courses",
+   "seats": 54,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN F 46": {
+   "type": "Seminars / Courses",
+   "seats": 60,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN G 42": {
+   "type": "Seminars / Courses",
+   "seats": 70,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CHN G 46": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 11": {
+   "type": "Lecture hall",
+   "seats": 193,
+   "extraSeats": 29,
+   "workstations": null,
+   "seating": "fixed",
+   "detail": {
+    "seatingLabel": "Fixed seating",
+    "examSeats": "35 (recommended)",
+    "floorArea": "212.95 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Stepped floor (lecture hall, stairs)"
+     ],
+     [
+      "Usable height",
+      "7.4 m"
+     ],
+     [
+      "Windows",
+      "available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "electric 13 m²"
+     ],
+     [
+      "Projection screen",
+      "available"
+     ],
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "few"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "Visualizer",
+      "Full HD  1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "3"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "4"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Recording",
+      "self-operated camera for blackboard"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio + camera for blackboard"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible easily accessible by lift"
+     ],
+     [
+      "Lift",
+      "available (lift 20 or 50)"
+     ],
+     [
+      "Accessible seating",
+      "not available"
+     ],
+     [
+      "Assistive hearing device",
+      "Induction loop"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HG D 26.2"
+     ],
+     [
+      "Other",
+      "with wheelchair only possible up to the lecturer's seat"
+     ],
+     [
+      "Other",
+      "Facility Services can provide a small, manually height-adjustable table in the front row if required"
+     ]
+    ]
+   }
+  },
+  "CAB G 51": {
+   "type": "Lecture hall",
+   "seats": 90,
+   "extraSeats": 22,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 52": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 56": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 57": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 59": {
+   "type": "Lecture hall",
+   "seats": 42,
+   "extraSeats": 18,
+   "workstations": null,
+   "seating": null
+  },
+  "CAB G 61": {
+   "type": "Lecture hall",
+   "seats": 193,
+   "extraSeats": 29,
+   "workstations": null,
+   "seating": null
+  },
+  "ETA F 5": {
+   "type": "Lecture hall",
+   "seats": 516,
+   "extraSeats": 72,
+   "workstations": null,
+   "seating": null
+  },
+  "ETF C 1": {
+   "type": "Lecture hall",
+   "seats": 301,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETF E 1": {
+   "type": "Lecture hall",
+   "seats": 301,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ E 6": {
+   "type": "Lecture hall",
+   "seats": 73,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ E 7": {
+   "type": "Lecture hall",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ E 8": {
+   "type": "Lecture hall",
+   "seats": 61,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ E 9": {
+   "type": "Lecture hall",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ F 91": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ G 91": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ H 91": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ J 91": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "ETZ K 91": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "GLC E 38.1": {
+   "type": "Meeting room",
+   "seats": 18,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "variable",
+   "detail": {
+    "seatingLabel": "variable seating",
+    "floorArea": "45.56 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Level floor"
+     ],
+     [
+      "Usable height",
+      "3.75 m"
+     ],
+     [
+      "Windows",
+      "not available (frosted glass wall)"
+     ]
+    ],
+    "equipment": [
+     [
+      "Flexible furniture",
+      "available"
+     ],
+     [
+      "Sockets",
+      "few"
+     ],
+     [
+      "Catering",
+      "not allowed"
+     ],
+     [
+      "Food",
+      "seated Catering allowed (Coffee breaks)"
+     ],
+     [
+      "Projector",
+      "not available"
+     ],
+     [
+      "Overhead projector",
+      "1"
+     ],
+     [
+      "HDMI connections",
+      "1"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Height-adjustable desks with wheelchair accessibility",
+      "not available"
+     ]
+    ]
+   }
+  },
+  "GLC E 38.2": {
+   "type": "Meeting room",
+   "seats": 18,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "LEE E 101": {
+   "type": "Lecture hall",
+   "seats": 62,
+   "extraSeats": 20,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI D 2": {
+   "type": "Lecture hall",
+   "seats": 66,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "fixed",
+   "detail": {
+    "seatingLabel": "Fixed seating",
+    "examSeats": "10 (recommended)",
+    "floorArea": "78.64 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Stepped floor (lecture hall, stairs)"
+     ],
+     [
+      "Usable height",
+      "3.49 m"
+     ],
+     [
+      "Windows",
+      "not available"
+     ],
+     [
+      "Food and drinks in the room",
+      "not allowed"
+     ]
+    ],
+    "equipment": [
+     [
+      "Blackboard",
+      "manually adjustable 8 m²"
+     ],
+     [
+      "Projection screen",
+      "available"
+     ],
+     [
+      "Projection area",
+      "2"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "few"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "Visualizer",
+      "Full HD  1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "2"
+     ],
+     [
+      "VGA connections",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "2"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "4"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Recording",
+      "self-operated camera for blackboard"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio + camera for blackboard"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "partially wheelchair accessible (raised seats)"
+     ],
+     [
+      "Lift",
+      "available access via E-floor"
+     ],
+     [
+      "Accessible seating",
+      "not available"
+     ],
+     [
+      "Assistive hearing device",
+      "Induction loop"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HIL E 61.3"
+     ],
+     [
+      "Other",
+      "with wheelchair only possible up to the lecturer's seat"
+     ]
+    ]
+   }
+  },
+  "HCI D 4": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI D 6": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI D 8": {
+   "type": "Lecture hall",
+   "seats": 66,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI E 2": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI E 8": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI F 2": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI F 8": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI G 3": {
+   "type": "Lecture hall",
+   "seats": 302,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI G 7": {
+   "type": "Lecture hall",
+   "seats": 302,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI H 2.1": {
+   "type": "Lecture hall",
+   "seats": 51,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI H 8.1": {
+   "type": "Lecture hall",
+   "seats": 51,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI J 3": {
+   "type": "Lecture hall",
+   "seats": 178,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI J 4": {
+   "type": "Lecture hall",
+   "seats": 118,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI J 6": {
+   "type": "Lecture hall",
+   "seats": 118,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI J 7": {
+   "type": "Lecture hall",
+   "seats": 178,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCI J 8": {
+   "type": "Seminars / Courses",
+   "seats": 24,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL B 21": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL C 10.2": {
+   "type": "Seminars / Courses",
+   "seats": 58,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL D 10.2": {
+   "type": "Seminars / Courses",
+   "seats": 50,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL D 60.1": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 1": {
+   "type": "Lecture hall",
+   "seats": 256,
+   "extraSeats": 6,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 3": {
+   "type": "Lecture hall",
+   "seats": 256,
+   "extraSeats": 6,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 4": {
+   "type": "Lecture hall",
+   "seats": 256,
+   "extraSeats": 6,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 5": {
+   "type": "Seminars / Courses",
+   "seats": 32,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 6": {
+   "type": "Lecture hall",
+   "seats": 136,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 7": {
+   "type": "Lecture hall",
+   "seats": 136,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 8": {
+   "type": "Lecture hall",
+   "seats": 136,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 9": {
+   "type": "Lecture hall",
+   "seats": 136,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL E 10.1": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIL F 10.3": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT E 51": {
+   "type": "Multipurpose room",
+   "seats": 153,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": "variable",
+   "detail": {
+    "seatingLabel": "variable seating",
+    "floorArea": "152.18 m²",
+    "other": [
+     [
+      "Floor shape",
+      "Level floor"
+     ],
+     [
+      "Usable height",
+      "5.84 m"
+     ],
+     [
+      "Use",
+      "only during building opening hours"
+     ]
+    ],
+    "equipment": [
+     [
+      "Projection area",
+      "1"
+     ],
+     [
+      "Lecturer's desk",
+      "available"
+     ],
+     [
+      "Sockets",
+      "many"
+     ],
+     [
+      "Other",
+      "height-adjustable podium"
+     ],
+     [
+      "Projector",
+      "max. resolution Full HD: 1920x1080"
+     ],
+     [
+      "HDMI connections",
+      "1"
+     ],
+     [
+      "USB-C connections for presentation",
+      "1"
+     ],
+     [
+      "Wireless Presenter (Solstice)",
+      "available"
+     ],
+     [
+      "Speakers",
+      "for Microphon and computer audio"
+     ],
+     [
+      "Microphones in the room",
+      "8"
+     ],
+     [
+      "Maximum number of wireless microphones",
+      "8"
+     ],
+     [
+      "Recording",
+      "for projection (incl. Visualizer)"
+     ],
+     [
+      "Video conference assisted",
+      "Contact: vc-helpdesk@id.ethz.ch"
+     ],
+     [
+      "Lecture hall transmission",
+      "available"
+     ],
+     [
+      "Webconferencing (BYOD)",
+      "audio only"
+     ]
+    ],
+    "accessibility": [
+     [
+      "Access",
+      "wheelchair accessible"
+     ],
+     [
+      "Height-adjustable desks with wheelchair accessibility",
+      "not available"
+     ],
+     [
+      "Assistive hearing device",
+      "Infrared"
+     ],
+     [
+      "Receiver assistive hearing device",
+      "pickup at MMT HIL E 61.3"
+     ]
+    ]
+   }
+  },
+  "HIT F 11.1": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT F 12": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT F 13": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT F 31.1": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT F 31.2": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT F 32": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT H 42": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT H 51": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT J 51": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT J 52": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT J 53": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT K 51": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HIT K 52": {
+   "type": "Seminars / Courses",
+   "seats": 30,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPH G 1": {
+   "type": "Lecture hall",
+   "seats": 502,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPH G 2": {
+   "type": "Lecture hall",
+   "seats": 368,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPH G 3": {
+   "type": "Lecture hall",
+   "seats": 368,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPV G 4": {
+   "type": "Lecture hall",
+   "seats": 222,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPV G 5": {
+   "type": "Lecture hall",
+   "seats": 176,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCP E 47.1": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCP E 47.2": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCP E 47.3": {
+   "type": "Seminars / Courses",
+   "seats": 40,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HCP E 47.4": {
+   "type": "Seminars / Courses",
+   "seats": 28,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPK D 3": {
+   "type": "Seminars / Courses",
+   "seats": 46,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPK D 24.2": {
+   "type": "Seminars / Courses",
+   "seats": 36,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPL D 32": {
+   "type": "Seminars / Courses",
+   "seats": 47,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPL D 34": {
+   "type": "Seminars / Courses",
+   "seats": 34,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  },
+  "HPT C 103": {
+   "type": "Seminars / Courses",
+   "seats": 72,
+   "extraSeats": null,
+   "workstations": null,
+   "seating": null
+  }
+ }
+}

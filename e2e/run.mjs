@@ -21,7 +21,8 @@ const catalog = JSON.parse(fs.readFileSync(path.join(root, 'public', 'rooms.json
 const ZENTRUM_TOTAL = catalog.filter(r => r.campus === 'Zentrum').length;
 const results = [];
 const check = (name, ok, detail = '') => { results.push(Boolean(ok)); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && detail ? '\n        → ' + detail : ''}`); };
-const rand = () => 41000 + Math.floor(Math.random() * 3000);
+let portSeq = 41000 + Math.floor(Math.random() * 2000);
+const rand = () => (portSeq += 3); // monotonic: never hands out the same port twice in one run
 
 // What each mock scenario must produce at 10:00 (derived from docs/UX_SPEC.md, independent of the app code).
 const EXPECT = {
@@ -43,7 +44,7 @@ const BACKEND = process.env.E2E_BACKEND === 'worker' ? 'worker' : 'node'; // E2E
 async function startStack(env = {}) {
   const mockPort = rand(), appPort = mockPort + 5000;
   const mock = await startMock(mockPort);
-  if (BACKEND === 'worker') {
+  if (BACKEND === 'worker' && !env.PUBLIC_DIR) { // a swappable public dir (update-flow test) needs the Node server
     const persist = tempDir('openroom-e2e-do-');
     const worker = await startWorker({mockPort, port: appPort, persist, vars: {ETH_MIN_INTERVAL_MS: '50', ETH_DAILY_BUDGET: '100000', ETH_MAX_QUEUE_WAIT_MS: '20000'}});
     let stopped = false;
@@ -725,7 +726,7 @@ async function phase9() {
     await b.nav(stack.url); await sleep(800);
     const sw = await b.ev(`(async()=>{const r=await navigator.serviceWorker.getRegistration();const names=await caches.keys();const urls=[];for(const n of names){const c=await caches.open(n);for(const q of await c.keys())urls.push(new URL(q.url).pathname);}return JSON.stringify({scope:r.scope,controlled:Boolean(navigator.serviceWorker.controller),names,urls});})()`).then(JSON.parse);
     check('service worker: registered with scope "/", controls the page', sw.scope === `${origin}/` && sw.controlled, JSON.stringify(sw));
-    check('service worker cache: versioned name, the app shell and all modules are precached, NO /api/ response is ever cached', sw.names.length === 1 && /^openroom-shell-v\d+$/.test(sw.names[0]) && ['/', '/index.html', '/app.js', '/schedule.mjs', '/recommend.mjs', '/timeline.mjs', '/detail-view.mjs', '/styles.css', '/rooms.json', '/manifest.webmanifest', '/icons/icon-192.png'].every(u => sw.urls.includes(u)) && !sw.urls.some(u => u.startsWith('/api/')), JSON.stringify(sw));
+    check('service worker cache: versioned name, the app shell and all modules are precached, NO /api/ response is ever cached', sw.names.length === 1 && /^openroom-shell-[0-9a-f]{12}$/.test(sw.names[0]) && ['/', '/app.js', '/schedule.mjs', '/recommend.mjs', '/timeline.mjs', '/detail-view.mjs', '/styles.css', '/rooms.json', '/manifest.webmanifest', '/icons/icon-192.png'].every(u => sw.urls.includes(u)) && !sw.urls.some(u => u.startsWith('/api/')), JSON.stringify(sw));
     await sleep(900); // let the app persist its own schedule cache
     // ---- offline: the server is really gone
     await stack.stop(); await sleep(500);
@@ -747,7 +748,171 @@ async function phase9() {
   } finally { b.cleanup(); await stack.stop(); }
 }
 
-try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); await phase7(); await phase8(); await phase9(); }
+// ---------------------------------------------------------------- phase 10 (Stage 4: filters, student access, room information; 375 px)
+const meta = JSON.parse(fs.readFileSync(path.join(root, 'public', 'room-metadata.json'), 'utf8'));
+const typeOf = code => ({'Lecture hall': 'lecture', 'Computer': 'computer', 'Seminars / Courses': 'seminar'})[meta.rooms[code]?.type];
+async function phase10() {
+  console.log('\n# Phase 10: filters, student access and room information on a phone-size screen');
+  const stack = await startStack(); const b = await openBrowser('p10');
+  const port = new URL(stack.url).port - 5000;
+  const stats = async () => (await fetch(`http://127.0.0.1:${port}/__stats`)).json();
+  const noHScroll = () => b.ev(`document.documentElement.scrollWidth<=innerWidth+1`);
+  const openFilters = async () => { await click(b, '#filters-btn'); await b.waitFor(`document.getElementById('filters-dialog').open`); };
+  const pick = (name, value) => b.ev(`(()=>{const i=document.querySelector('#filters-form input[name=${name}][value=${JSON.stringify(value)}]');i.click();})()`);
+  try {
+    await b.initScript(`if(!localStorage.getItem('openroom-prefs-v1'))localStorage.setItem('openroom-prefs-v1',JSON.stringify({filters:{type:'lecture'}}));`);
+    await b.nav(stack.url);
+    await b.waitFor(`/based on \\d+ of \\d+/.test(document.getElementById('coverage-text').textContent)`, 20000); await sleep(1500);
+    let st = await stats();
+    const asked = Object.keys(st.alloc);
+    check('filter set BEFORE loading: all 6 initial requests are for matching rooms (lecture halls), chosen before any schedule was requested', st.total === 6 && asked.every(c => typeOf(c) === 'lecture'), JSON.stringify(asked.map(c => [c, typeOf(c)])));
+    check('the filter bar shows the active filter, a count and a Reset action; coverage note is visible', await b.ev(`document.getElementById('filters-count').textContent==='1'&&/Lecture hall/.test(document.getElementById('filter-summary').textContent)&&!document.getElementById('filters-reset').hidden&&!document.getElementById('filter-note').hidden`));
+    check('every recommendation card is a lecture hall', (await cards(b)).every(c => typeOf(c.code) === 'lecture'));
+    check('home with filters: no horizontal scroll at 375 px', await noHScroll());
+    await b.screenshot(path.join(shots, 'filters-active.png'));
+
+    // ---- changing filters never contacts ETH or our API
+    const apiBefore = await apiCalls(b);
+    await openFilters();
+    check('filters panel opens as a sheet that fits the phone (no horizontal scroll), 44 px touch targets', await noHScroll() && await b.ev(`[...document.querySelectorAll('#filters-form .radio-pill span')].every(e=>e.getBoundingClientRect().height>=44)`));
+    await b.screenshot(path.join(shots, 'filters-panel.png'));
+    await pick('ft', 'seminar'); await pick('fc', '20'); await pick('fa', 'general'); await pick('fa', 'all'); await pick('ft', 'all'); await pick('fc', 'any');
+    await b.ev(`document.getElementById('fg-flexible').click()`); await b.ev(`document.getElementById('fg-flexible').click()`);
+    await sleep(500);
+    check('changing room type, capacity, equipment and access six+ times made ZERO API requests', (await apiCalls(b)) === apiBefore && (await stats()).total === 6, `${await apiCalls(b)} vs ${apiBefore}`);
+    check('Reset filters (inside the panel) restores the defaults and the preference is saved', await (async () => {
+      await pick('ft', 'computer'); await click(b, '#filters-reset-dialog'); await sleep(200);
+      return b.ev(`(()=>{const p=JSON.parse(localStorage.getItem('openroom-prefs-v1'));return document.querySelector('#filters-form input[name=ft][value=all]').checked&&document.getElementById('filters-count').hidden&&p.filters.type==='all';})()`);
+    })());
+    // ---- type + capacity combined: matching rooms only, computed locally
+    await pick('ft', 'lecture'); await pick('fc', '40'); await sleep(200);
+    const want = catalog.filter(r => r.campus === 'Zentrum' && typeOf(r.code) === 'lecture' && Number(meta.rooms[r.code]?.seats) >= 40).length;
+    check('the panel reports how many rooms on the campus match (type + capacity combined) from local metadata', (await b.ev(`document.getElementById('filters-result').textContent`)).startsWith(`${want} of ${ZENTRUM_TOTAL} rooms`), await text(b, '#filters-result'));
+    await b.ev(`document.querySelector('#filters-form .primary-button').click()`); await sleep(300);
+    check('a filter that matches rooms already checked keeps their cards; no request was made', (await apiCalls(b)) === apiBefore);
+    check('capacity + type filter: every shown card is a lecture hall with at least 40 seats', (await cards(b)).every(c => typeOf(c.code) === 'lecture' && Number(meta.rooms[c.code].seats) >= 40));
+    await click(b, '#filters-reset'); await sleep(200);
+
+    // ---- student access: unknown by default, never confirmed from "Free"
+    await openFilters(); await pick('fa', 'general'); await b.ev(`document.querySelector('#filters-form .primary-button').click()`); await sleep(300);
+    check('"General access confirmed only": no room is shown because none is verified; the page says so and nothing is requested', (await cards(b)).length === 0 && /No room on this campus matches/.test(await text(b, '#recommendations')) && (await apiCalls(b)) === apiBefore);
+    await click(b, '#filters-reset'); await sleep(200);
+    check('default access setting: unknown-access rooms ARE recommended and each card says the access is unverified', (await cards(b)).length > 0 && await b.ev(`[...document.querySelectorAll('#recommendations .rec-access')].every(e=>/not verified/i.test(e.textContent))`));
+
+    // ---- Browse buildings keeps unknown-access rooms and honours type filters
+    await b.ev(`document.getElementById('room-search').value='HG E 27';document.getElementById('room-search').dispatchEvent(new Event('input'))`); await sleep(500);
+    check('Browse buildings: the computer room HG E 27 is found with the default filters', /HG E 27/.test(await text(b, '#room-results')));
+    await openFilters(); await pick('ft', 'lecture'); await b.ev(`document.querySelector('#filters-form .primary-button').click()`); await sleep(400);
+    check('Browse buildings: a lecture-hall filter hides the computer room and says the filters caused it', !/HG E 27/.test(await text(b, '#room-results')) && /filters/.test(await text(b, '#room-results')));
+    await click(b, '#filters-reset'); await sleep(300);
+
+    // ---- favorites are independent of filters
+    await b.ev(`document.getElementById('room-search').value='HG E 27';document.getElementById('room-search').dispatchEvent(new Event('input'))`); await sleep(400);
+    await b.ev(`document.querySelector('#room-results [data-favorite], #room-results .star-btn')?.click()`); await sleep(300);
+    await openFilters(); await pick('ft', 'lecture'); await b.ev(`document.querySelector('#filters-form .primary-button').click()`); await sleep(300);
+    check('Favorites ignore filters: the favorite computer room is still listed under a lecture-hall filter', /HG E 27/.test(await text(b, '#favorites-list')), await text(b, '#favorites-list'));
+    await click(b, '#filters-reset'); await sleep(200);
+
+    // ---- room detail: Student access + collapsible Room information
+    await b.ev(`document.querySelector('#favorites-list [data-open-detail]').click()`); await b.waitFor(`!document.getElementById('room-detail').hidden`); await sleep(500);
+    check('room detail: "Student access" is its own section and says Access unknown with an official source link; Free/Booked status is separate', await b.ev(`(()=>{const a=document.getElementById('rd-access');return /Student access/.test(a.textContent)&&/Access unknown/.test(a.textContent)&&a.querySelector('a[href^="https://ethz.ch"]')&&/separate from the Free/.test(a.textContent);})()`));
+    check('room detail: a computer room is never described as freely accessible', await b.ev(`/not freely accessible|restricted|computer room/i.test(document.getElementById('rd-access').textContent)&&!/General access confirmed/.test(document.getElementById('rd-access').textContent)`), await text(b, '#rd-access'));
+    check('room detail: "Room information" is collapsed by default and expands to type, seats, workstations and an official Rauminfo link', await b.ev(`(()=>{const d=document.getElementById('rd-info');if(d.open)return false;d.open=true;const t=document.getElementById('rd-info-body').textContent;return /Room type/.test(t)&&/Seats/.test(t)&&/Computer workstations/.test(t)&&Boolean(d.querySelector('a[href^="https://ethz.ch"]'));})()`), await text(b, '#rd-info-body'));
+    check('room detail: unknown fields are labelled Unknown, never blank, never invented', await b.ev(`/Unknown/.test(document.getElementById('rd-info-body').textContent)`));
+    check('room detail with both sections open: no horizontal scroll, timeline still present', await noHScroll() && await b.ev(`Boolean(document.querySelector('#rd-timeline .tl'))`));
+    await b.screenshot(path.join(shots, 'room-detail-info.png'));
+    check('no console exceptions in phase 10', b.errors.length === 0, b.errors.join(' | '));
+  } finally { b.cleanup(); await stack.stop(); }
+}
+
+// ---------------------------------------------------------------- phase 11 (Stage 4: pull-to-refresh and app updates; 375 px)
+import {render as renderVersion} from '../scripts/stamp-version.mjs';
+async function phase11() {
+  console.log('\n# Phase 11: pull-to-refresh, manual refresh and PWA update flow');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openroom-pub-'));
+  const writeStamp = () => { for (const [f, c] of Object.entries(renderVersion(dir))) fs.writeFileSync(path.join(dir, f), c); };
+  fs.cpSync(path.join(root, 'public'), dir, {recursive: true}); writeStamp();
+  const versionOf = () => JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).version;
+  const stack = await startStack({PUBLIC_DIR: dir}); const b = await openBrowser('p11');
+  if (BACKEND === 'worker') { console.log('  (update flow needs a swappable public dir: runs on the Node backend only; pull checks still run on the worker)'); }
+  const v1 = versionOf();
+  const swipe = async (fromY, toY, x = 180) => {
+    await b.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y: fromY}]});
+    const steps = 12; for (let i = 1; i <= steps; i++) { await b.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x, y: fromY + (toY - fromY) * i / steps}]}); await sleep(15); }
+    await b.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+  };
+  const loadsCounter = `try{sessionStorage.setItem('__loads',String(Number(sessionStorage.getItem('__loads')||0)+1))}catch{}`;
+  const versionFetches = () => b.ev(`performance.getEntriesByType('resource').filter(e=>e.name.includes('/version.json')).length`);
+  try {
+    await b.send('Emulation.setTouchEmulationEnabled', {enabled: true, maxTouchPoints: 5});
+    await b.initScript(`if(!localStorage.getItem('openroom-prefs-v1'))localStorage.setItem('openroom-prefs-v1',JSON.stringify({campus:'Hönggerberg',favorites:['HG E 27'],filters:{type:'all',capacity:'20'}}));${loadsCounter}`);
+    await b.nav(stack.url);
+    await b.waitFor(`/based on \\d+ of \\d+/.test(document.getElementById('coverage-text').textContent)`, 20000); await sleep(1500);
+    await b.waitFor(`navigator.serviceWorker.getRegistration().then(r=>Boolean(r&&r.active))`, 10000);
+    await b.nav(stack.url); await sleep(1200);
+    check('the running version is shown in Settings and equals the deployed version', await b.ev(`document.getElementById('app-version').textContent`) === v1 && await b.ev(`self.OPENROOM_VERSION`) === v1);
+    const api0 = await apiCalls(b), st0 = await (await fetch(`http://127.0.0.1:${new URL(stack.url).port - 5000}/__stats`)).json();
+
+    // ---- pull gesture
+    await swipe(300, 340);   // 40 px of finger travel is under the threshold
+    await sleep(500);
+    check('a short pull springs back: no update check, no request', (await versionFetches()) === 0 && (await apiCalls(b)) === api0 && await b.ev(`document.getElementById('ptr').hidden`));
+    await b.ev(`window.scrollTo(0,400)`); await sleep(200);
+    await swipe(300, 560); await sleep(500);
+    check('a long downward swipe while the page is scrolled down never starts a refresh (normal scrolling is left alone)', (await versionFetches()) === 0 && await b.ev(`document.getElementById('ptr').hidden`));
+    await b.ev(`window.scrollTo(0,0)`); await sleep(200);
+    await b.ev(`document.querySelector('.rec-main, .fav-main')?.click()`); await sleep(500);
+    const detailOpen = await b.ev(`!document.getElementById('room-detail').hidden`);
+    await swipe(300, 600); await sleep(500);
+    check('inside the room detail screen a downward swipe does not trigger a refresh', detailOpen && (await versionFetches()) === 0);
+    await b.ev(`document.getElementById('rd-close')?.click()`); await sleep(300);
+    await b.ev(`window.__advance(60000)`);
+    await swipe(200, 520); await b.waitFor(`document.querySelector('#ptr[data-phase=done]')`, 15000); await sleep(300);
+    const done = await text(b, '#ptr-text');
+    check('a full pull at the top checks the version (no-store request), finds the app current and says so', (await versionFetches()) === 1 && /App is up to date/.test(done), done);
+    check('the refresh reloads nothing and keeps favorites, campus and filters', await b.ev(`(()=>{const p=JSON.parse(localStorage.getItem('openroom-prefs-v1'));return sessionStorage.getItem('__loads')==='2'&&p.campus==='Hönggerberg'&&p.favorites.includes('HG E 27')&&p.filters.capacity==='20';})()`));
+    const st1 = await (await fetch(`http://127.0.0.1:${new URL(stack.url).port - 5000}/__stats`)).json();
+    const refreshCalls = (await apiCalls(b)) - api0;
+    check('data refresh is small and bounded: at most 6 room requests (the initial budget), never the whole catalog', refreshCalls <= 6 && st1.total - st0.total <= 6, `api ${refreshCalls}, eth ${st1.total - st0.total}`);
+    check('the result text never claims a shared-cache answer came fresh from ETH', /from the shared cache|from ETH|Nothing to refresh|could not/.test(done) && !/freshly/.test(done), done);
+    check('no horizontal scroll while the indicator is shown', await b.ev(`document.documentElement.scrollWidth<=innerWidth+1`));
+    await b.screenshot(path.join(shots, 'pull-refresh-done.png'));
+    await b.ev(`window.__advance(60000)`);
+    // ---- manual refresh button (fallback)
+    await click(b, '#refresh-app'); await b.waitFor(`document.querySelector('#ptr[data-phase=done]')`, 15000);
+    check('the Refresh button does the same without a gesture', (await versionFetches()) === 2 && /App is up to date/.test(await text(b, '#ptr-text')));
+    // ---- offline update check
+    await b.ev(`window.__advance(60000)`);
+    await b.blockUrls(['*version.json*']);
+    await click(b, '#refresh-app'); await b.waitFor(`document.querySelector('#ptr[data-phase=done]')`, 15000);
+    const off = await text(b, '#ptr-text');
+    check('update check blocked (offline-like): calm message, the app keeps running, nothing reloaded', /offline|could not check/i.test(off) && await b.ev(`sessionStorage.getItem('__loads')==='2'`), off);
+    await b.blockUrls([]);
+
+    // ---- a new deployment: v2
+    fs.appendFileSync(path.join(dir, 'styles.css'), '\n/* v2 */ .stage4-marker{outline:0}\n'); writeStamp();
+    const v2 = versionOf();
+    check('a changed stylesheet alone yields a new version identifier', v1 !== v2);
+    await b.ev(`window.__advance(60000)`);
+    await b.ev(`window.__marker='before-update'`);
+    await click(b, '#refresh-app');
+    await b.waitFor(`sessionStorage.getItem('__loads')==='3'&&document.readyState==='complete'&&self.OPENROOM_VERSION`, 20000); await sleep(1800);
+    check('update: the page reloaded EXACTLY once and now runs the new version', await b.ev(`self.OPENROOM_VERSION`) === v2 && await b.ev(`sessionStorage.getItem('__loads')`) === '3' && await b.ev(`window.__marker===undefined`));
+    check('update: only the new version\'s cache remains and the new stylesheet is the one served', await b.ev(`(async()=>{const n=await caches.keys();const r=await (await fetch('/styles.css')).text();return n.length===1&&n[0]==='openroom-shell-${v2}'&&r.includes('stage4-marker');})()`));
+    check('update: favorites, campus and filters survived', await b.ev(`(()=>{const p=JSON.parse(localStorage.getItem('openroom-prefs-v1'));return p.campus==='Hönggerberg'&&p.favorites.includes('HG E 27')&&p.filters.capacity==='20';})()`));
+    check('update: the settings dialog shows the new version', await b.ev(`document.getElementById('app-version').textContent`) === v2);
+    await sleep(1500);
+    check('update: no reload loop — the page is still on load #3 after waiting', await b.ev(`sessionStorage.getItem('__loads')`) === '3');
+    // ---- pull again: now current
+    await b.ev(`window.__advance(60000)`);
+    const before = await versionFetches();
+    await swipe(200, 520); await b.waitFor(`document.querySelector('#ptr[data-phase=done]')`, 15000);
+    check('after updating, the next refresh says the app is up to date and does not reload', /App is up to date/.test(await text(b, '#ptr-text')) && await b.ev(`sessionStorage.getItem('__loads')`) === '3' && (await versionFetches()) >= before + 1);
+    check('no unexpected console errors in phase 11', b.errors.filter(e => !/Failed to load resource|net::ERR|Failed to fetch/.test(e)).length === 0, b.errors.join(' | '));
+  } finally { b.cleanup(); await stack.stop(); fs.rmSync(dir, {recursive: true, force: true}); }
+}
+
+try { await phase1(); await phase2(); await phase3(); await phase4(); await phase5(); await phase6(); await phase7(); await phase8(); await phase9(); await phase10(); await phase11(); }
 catch (error) { check('e2e ran to completion', false, error.stack); }
 fs.writeFileSync(path.join(shots, 'performance.json'), JSON.stringify(metrics, null, 2));
 console.log(`\nBackend: ${BACKEND}`);

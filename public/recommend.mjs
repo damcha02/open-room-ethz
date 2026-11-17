@@ -321,6 +321,26 @@ export function planRevalidation({candidates, getRecord, ctx, budget = INITIAL_R
   }
   return out;
 }
+/** Rooms to refresh when the user pulls to refresh, in priority order, without duplicates and never more than `limit`
+ * (the request budget). Callers pass favorites first (selected campus first), then the rooms currently recommended, then the rest. */
+export function selectRefreshTargets({favorites = [], recommended = [], attempted = [], limit = INITIAL_REQUEST_BUDGET}) {
+  const out = [];
+  for (const code of [...favorites, ...recommended, ...attempted]) {
+    if (out.length >= limit) break;
+    if (!out.includes(code)) out.push(code);
+  }
+  return out;
+}
+/** Honest result of a data refresh. A shared-cache answer is NOT reported as fresh from ETH. `newest` is the ETH fetch time (formatted). */
+export function describeRefresh({targets = 0, eth = 0, cache = 0, failed = 0, newest = null}) {
+  if (!targets) return 'Nothing to refresh yet — no rooms have been checked.';
+  const parts = [];
+  if (eth + cache) parts.push(`Updated ${plural(eth + cache, 'room')}: ${eth} from ETH, ${cache} from the shared cache`);
+  if (failed) parts.push(`${plural(failed, 'room')} could not be updated`);
+  if (newest && eth + cache) parts.push(`newest ETH data ${newest}`);
+  return parts.join(' · ') || 'Nothing could be refreshed right now.';
+}
+
 /** Favorites from BOTH campuses, independent of campus, mode and free-only. Codes missing from the catalog are kept. */
 export function favoriteRooms(rooms, favorites) {
   const known = new Map(rooms.map(r => [r.code, r]));

@@ -104,3 +104,38 @@ test('markup: the entry list is an accessible alternative; the card carries note
   assert.equal(cardHtml(null), '');
   assert.match(legendHtml(), /Free[\s\S]*Booked[\s\S]*Blocked/);
 });
+
+// ---------------------------------------------------------------- Stage 4: student access and room information
+import {accessSectionHtml, roomInfoHtml} from '../public/detail-view.mjs';
+test('student access section: separate from the booking status, three states, source and date, nothing unescaped', () => {
+  const unknown = accessSectionHtml({info: {status: 'unknown', label: 'Access unknown', summary: 'ETH has not confirmed it. "Free" only means no published reservation.', notes: 'n <b>x</b>', source: 'https://ethz.ch/a.pdf', verifiedAt: '2026-11-17'}, notice: 'Computer room: not freely accessible.'});
+  assert.match(unknown, /<h3 class="rd-h">Student access<\/h3>/);
+  assert.match(unknown, /rd-access-card is-unknown/);
+  assert.match(unknown, /Access unknown/);
+  assert.match(unknown, /rd-warn">Computer room/);
+  assert.match(unknown, /href="https:\/\/ethz\.ch\/a\.pdf" target="_blank" rel="noopener noreferrer"/);
+  assert.match(unknown, /checked 2026-11-17/);
+  assert.match(unknown, /Access rules are separate from the Free \/ Booked \/ Blocked status\./);
+  assert.doesNotMatch(unknown, /<b>/);
+  assert.match(accessSectionHtml({info: {status: 'general', label: 'General access confirmed', summary: 's', notes: null, source: null, verifiedAt: null}}), /is-general/);
+  const restricted = accessSectionHtml({info: {status: 'restricted', label: 'Restricted access', summary: 's', notes: 'Only students of department X', source: 'https://ethz.ch/x', verifiedAt: '2026-11-17'}});
+  assert.match(restricted, /is-restricted[\s\S]*Only students of department X/);
+  assert.doesNotMatch(unknown + restricted, /rd-warn[\s\S]*rd-warn/);
+});
+test('room information: rows, verbatim ETH labels, Unknown for unverified lists, provenance and official link', () => {
+  const html = roomInfoHtml({
+    rows: [{label: 'Room type', value: 'Computer'}, {label: 'Seats', value: 'Not published for computer rooms', unknown: true}, {label: 'Computer workstations', value: '39'}],
+    equipment: [['Printer', 'available 2']], accessibility: null, other: null, provenance: 'Source: ETH Rauminfo (room list 2026-11-17).', officialUrl: 'https://ethz.ch/x?a=1&b=2', detailCount: 10
+  });
+  assert.match(html, /<dt>Computer workstations<\/dt><dd>39<\/dd>/);
+  assert.match(html, /<dd class="is-unknown">Not published for computer rooms<\/dd>/);
+  assert.match(html, /<li><span>Printer<\/span><span>available 2<\/span><\/li>/);
+  assert.match(html, /Accessibility<\/h4><p class="info-unknown">Unknown — not verified for this room\./);
+  assert.doesNotMatch(html, /Other details/);
+  assert.match(html, /verified for 10 rooms only; “Unknown” means not verified, not absent/);
+  assert.match(html, /href="https:\/\/ethz\.ch\/x\?a=1&amp;b=2"/);
+  const none = roomInfoHtml({rows: [], equipment: null, accessibility: null, other: [['Windows', 'available']], provenance: null, officialUrl: null, detailCount: 0});
+  assert.match(none, /Equipment and furniture<\/h4><p class="info-unknown">Unknown/);
+  assert.match(none, /Other details from ETH/);
+  assert.doesNotMatch(none, /Official ETH Rauminfo page/);
+});

@@ -72,3 +72,25 @@ export function cardHtml(info) {
 export function unavailableHtml({heading, message, retry, paused}) {
   return `<div class="rd-unknown" role="status"><div class="rd-unknown-title">${esc(heading)}</div><p>${esc(message)}</p>${retry ? `<button type="button" class="secondary-button" id="rd-retry"${paused ? ' disabled' : ''}>${paused ? 'Paused — ETH rate limit' : 'Try again'}</button>` : ''}</div>`;
 }
+
+/** Student access: a section of its own, separate from the Free / Booked / Blocked status. `info` comes from accessInfo(). */
+export function accessSectionHtml({info, notice = null}) {
+  const source = info.source
+    ? `<p class="rd-src">Source: <a href="${esc(info.source)}" target="_blank" rel="noopener noreferrer">official ETH document ↗</a>${info.verifiedAt ? ` · checked ${esc(info.verifiedAt)}` : ''}</p>` : '';
+  return `<h3 class="rd-h">Student access</h3><div class="rd-access-card is-${esc(info.status)}"><span class="rd-access-badge">${esc(info.label)}</span>`
+    + `<p>${esc(info.summary)}</p>${info.notes ? `<p>${esc(info.notes)}</p>` : ''}${notice ? `<p class="rd-warn">${esc(notice)}</p>` : ''}${source}`
+    + `<p class="rd-src">Access rules are separate from the Free / Booked / Blocked status.</p></div>`;
+}
+/** "Room information": verified facts only. Unknown fields say so; verbatim ETH labels for equipment and accessibility. */
+export function roomInfoHtml({rows, equipment, accessibility, other, provenance, officialUrl, detailCount}) {
+  const list = (title, items, unknown) => `<h4 class="info-h">${esc(title)}</h4>${items
+    ? `<ul class="info-list">${items.map(([label, value]) => `<li><span>${esc(label)}</span><span>${esc(value)}</span></li>`).join('')}</ul>`
+    : `<p class="info-unknown">${esc(unknown)}</p>`}`;
+  const dl = rows.map(r => `<dt>${esc(r.label)}</dt><dd${r.unknown ? ' class="is-unknown"' : ''}>${esc(r.value)}${r.note ? ` <small>(${esc(r.note)})</small>` : ''}</dd>`).join('');
+  return `<dl class="info-rows">${dl}</dl>`
+    + list('Equipment and furniture', equipment, 'Unknown — not verified for this room.')
+    + list('Accessibility', accessibility, 'Unknown — not verified for this room.')
+    + (other ? list('Other details from ETH', other, '') : '')
+    + `<p class="info-foot">${provenance ? `${esc(provenance)} ` : ''}Equipment, furniture and accessibility details are verified for ${esc(detailCount ?? 0)} rooms only; “Unknown” means not verified, not absent.`
+    + `${officialUrl ? ` <a class="source-link" href="${esc(officialUrl)}" target="_blank" rel="noopener noreferrer">Official ETH Rauminfo page ↗</a>` : ''}</p>`;
+}

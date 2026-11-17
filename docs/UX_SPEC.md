@@ -189,3 +189,7 @@ Rules:
 - No opening hours are assumed: type-8 blocks are drawn as published blocks only. With no published block, a room at 03:00 is
   "Free" (no published entry) and the screen says Free never means empty, open or accessible.
 - No duration has to be chosen anywhere.
+
+## 9. Filters, student access, room information and refresh (Stage 4)
+
+See [`ROOM_METADATA.md`](ROOM_METADATA.md) and [`UPDATES.md`](UPDATES.md). Summary: a Filters button under the mode tabs opens a bottom sheet (room type, capacity, flexible furniture, student access) with a result count and Reset; filters apply to recommendations and Browse buildings, never to Favorites, and never cause a request. Recommendation cards carry an access mark ("Access not verified" for all rooms today). The room detail has a **Student access** section (separate from Free/Booked/Blocked) and a collapsed **Room information** section (unknown fields say Unknown). Pull-to-refresh (top of the page only) and a Refresh button check the app version and refresh at most 6 prioritized rooms.

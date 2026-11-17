@@ -9,3 +9,11 @@
   Cross-Origin-Opener-Policy: same-origin
   Strict-Transport-Security: max-age=31536000
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'
+
+# The update check must never come from an HTTP cache. These match in addition to /* above (headers are merged).
+/version.json
+  Cache-Control: no-store
+/sw.js
+  Cache-Control: no-cache
+/sw-version.js
+  Cache-Control: no-cache

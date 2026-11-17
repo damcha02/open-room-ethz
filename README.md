@@ -13,6 +13,8 @@ Open Room ETHZ is a mobile-first progressive web app (PWA) that suggests ETH Zü
 - **Free now / Free soon / Rest of day** recommendations for the selected campus (Zentrum or Hönggerberg), with an honest coverage line ("based on 8 of 64 listed rooms checked").
 - **Favorites** from both campuses, always visible.
 - **Room detail screen:** current status (Free / Booked / Blocked / Unknown), next change, freshness, day navigation and a proportional 24-hour timeline with a current-time line; tap a booking for course information.
+- **Filters** (room type, capacity, flexible furniture, student access), local and persisted; **Room information** and **Student access** sections in the room detail; see [`docs/ROOM_METADATA.md`](docs/ROOM_METADATA.md).
+- **Pull-to-refresh** (and a Refresh button) checks for a new app version and refreshes today's rooms in a small bounded batch; see [`docs/UPDATES.md`](docs/UPDATES.md).
 - Browse buildings, search, week/day navigation, "free only" filter, manual room codes.
 - Installable PWA, works offline for the app shell and previously cached schedules (marked Stale when old; never shown as current).
 - No accounts, no tracking, no location, no cookies.
@@ -42,6 +44,7 @@ phone (PWA)  ──▶  Cloudflare Workers Static Assets   public/ (HTML, JS, CS
 | Path | Purpose |
 |---|---|
 | `public/` | The PWA: `index.html`, `app.js`, `styles.css`, `sw.js`, `manifest.webmanifest`, icons, `_headers`, `404.html`, `rooms.json` |
+| `public/metadata.mjs`, `update.mjs`, `pull-refresh.mjs`, `room-metadata.json`, `version.json`, `sw-version.js` | Room metadata and filters, update flow, pull gesture, static catalog, generated version files (`npm run stamp`) |
 | `public/schedule.mjs`, `recommend.mjs`, `timeline.mjs`, `detail-view.mjs` | Pure logic: time/DST handling, recommendations, timeline geometry, markup builders |
 | `lib/allocations-core.js` | Runtime-neutral API core shared by Node and the Worker: validation, strict parsing, room verification, age/cache headers |
 | `worker/` | Cloudflare Worker (`router.js`, `index.js`) and the Durable Object logic (`gateway.js`) |
@@ -103,6 +106,8 @@ ETH says it manages 118 teaching rooms in Zentrum and 58 in Hönggerberg; this s
 
 - [`docs/UX_SPEC.md`](docs/UX_SPEC.md): behavior of the home screen, modes, request budget, freshness and room detail.
 - [`docs/REQUEST_TRIGGERS.md`](docs/REQUEST_TRIGGERS.md): the complete list of what causes a request.
+- [`docs/ROOM_METADATA.md`](docs/ROOM_METADATA.md): metadata sources, fields, filters, student access.
+- [`docs/UPDATES.md`](docs/UPDATES.md): versioning, service worker lifecycle, pull-to-refresh, manual phone test.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): production deployment, limits, budgets, costs, Cloudflare Access, installation.
 - [`docs/PRODUCTION_ARCHITECTURE.md`](docs/PRODUCTION_ARCHITECTURE.md): the design rationale behind the Worker and Durable Object.
 

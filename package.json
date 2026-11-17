@@ -15,7 +15,10 @@
     "test:e2e": "node e2e/run.mjs",
     "test:worker": "node worker-tests/run.mjs",
     "icons": "scripts/build-icons.sh",
-    "deploy": "wrangler deploy"
+    "stamp": "node scripts/stamp-version.mjs",
+    "stamp:check": "node scripts/stamp-version.mjs --check",
+    "metadata": "node scripts/build-room-metadata.mjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.163.0"

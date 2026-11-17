@@ -75,14 +75,14 @@ One API call = one Worker request + one Durable Object request. A first visit ma
 npm ci
 npm test && npm run test:worker && npm run test:e2e   # all mock-based
 npx wrangler login                                      # once; interactive, stores a token outside the repo
-npm run deploy                                          # wrangler deploy
+npm run deploy                                          # stamps the version, refuses uncommitted app changes, then wrangler deploy
 npx wrangler tail                                       # live logs (free)
 npx wrangler rollback                                   # back to the previous version
 ```
 
 The Durable Object schema is created by the code (`CREATE TABLE IF NOT EXISTS`); the single migration `v1` declares the SQLite-backed class.
 
-Static assets revalidate on every load (`Cache-Control: public, max-age=0, must-revalidate` with ETags), so a new deployment reaches installed apps on their next launch. When shell files change in a way that must reach installed apps, bump `CACHE` in `public/sw.js` (old caches are deleted on activation).
+Every deployment changes the app version (a content hash of `public/`, see [`UPDATES.md`](UPDATES.md)); installed apps pick it up on pull-to-refresh or the next launch without reinstalling. `version.json` is `no-store`, `sw.js`/`sw-version.js` are `no-cache`. Never edit `version.json`/`sw-version.js` by hand: run `npm run stamp`.
 
 ## 6. Cloudflare Access (restricting the app to your email)
 
@@ -106,7 +106,7 @@ Automated use of ETH Rauminfo has not been explicitly approved by ETH. The endpo
 - **iPhone (Safari only):** open the production URL → Share → *Add to Home Screen* → *Add*. Launch from the home-screen icon (standalone, no browser bar).
 - **Android (Chrome):** open the URL → menu ⋮ → *Install app*. 
 - Offline: after one online visit the app shell and previously loaded fresh schedules work without a connection; expired schedules are shown as Stale and never recommended.
-- Updates arrive on the next launch; fully closing and reopening the app applies them.
+- Updates: pull down from the top (or tap Refresh) to check for and apply a new version; an update that finished installing is also applied on the next launch. See [`UPDATES.md`](UPDATES.md).
 
 ## 9. Abuse and budget exhaustion (known limitation of a public URL)
 

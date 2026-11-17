@@ -41,7 +41,7 @@ async function launchOnce({binary, port, profile, width = 375, height = 812}) {
   await send('Runtime.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 2, mobile: true});
   const api = {
-    errors,
+    errors, send,
     async ev(expression) {
       const r = await send('Runtime.evaluate', {expression, awaitPromise: true, returnByValue: true});
       if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
@@ -61,6 +61,8 @@ async function launchOnce({binary, port, profile, width = 375, height = 812}) {
       const base = {key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code, text: key === 'Enter' ? '\r' : key === ' ' ? ' ' : undefined};
       await send('Input.dispatchKeyEvent', {type: 'keyDown', ...base}); await send('Input.dispatchKeyEvent', {type: 'keyUp', ...base});
     },
+    /** Blocks matching URLs for the rest of the session (used to keep a test away from the API). */
+    async blockUrls(patterns) { await send('Network.enable'); await send('Network.setBlockedURLs', {urls: patterns}); },
     /** Chromium's own installability verdict for the current page (empty list = installable). */
     async installabilityErrors() { return (await send('Page.getInstallabilityErrors')).result.installabilityErrors; },
     async appManifest() { const r = (await send('Page.getAppManifest')).result; return {url: r.url, errors: r.errors, data: r.data ? JSON.parse(r.data) : null}; },

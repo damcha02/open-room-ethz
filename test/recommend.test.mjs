@@ -496,3 +496,21 @@ test('revalidation: a stale record that is backing off after a failed refresh is
   assert.deepEqual(planRevalidation({candidates: ['x'], getRecord: () => backoff, ctx: ctx()}), []);
   assert.deepEqual(planRevalidation({candidates: ['x'], getRecord: () => ({...backoff, retryAt: NOW_MS - 1}), ctx: ctx()}), ['x']);
 });
+
+// ---------- Stage 4: pull-to-refresh targets and honest result wording ----------
+import {selectRefreshTargets, describeRefresh} from '../public/recommend.mjs';
+test('refresh targets: favorites first, then recommended, then the rest; unique and bounded by the request budget', () => {
+  assert.deepEqual(selectRefreshTargets({favorites: ['f1', 'f2'], recommended: ['f2', 'r1'], attempted: ['a1', 'a2', 'a3', 'a4', 'a5']}), ['f1', 'f2', 'r1', 'a1', 'a2', 'a3']);
+  assert.equal(selectRefreshTargets({favorites: Array.from({length: 20}, (_, i) => `f${i}`)}).length, INITIAL_REQUEST_BUDGET, 'never more than 6, however many favorites');
+  assert.deepEqual(selectRefreshTargets({favorites: ['f1'], limit: 1, recommended: ['r1']}), ['f1']);
+  assert.deepEqual(selectRefreshTargets({}), []);
+  assert.deepEqual(selectRefreshTargets({recommended: ['x', 'x', 'x']}), ['x']);
+});
+test('refresh wording: a shared-cache answer is never reported as fresh from ETH', () => {
+  assert.equal(describeRefresh({targets: 6, eth: 2, cache: 3, failed: 1, newest: '12:03'}), 'Updated 5 rooms: 2 from ETH, 3 from the shared cache · 1 room could not be updated · newest ETH data 12:03');
+  assert.equal(describeRefresh({targets: 3, eth: 0, cache: 3, newest: '12:01'}), 'Updated 3 rooms: 0 from ETH, 3 from the shared cache · newest ETH data 12:01');
+  assert.equal(describeRefresh({targets: 1, eth: 1, cache: 0, newest: '12:05'}), 'Updated 1 room: 1 from ETH, 0 from the shared cache · newest ETH data 12:05');
+  assert.equal(describeRefresh({targets: 2, failed: 2}), '2 rooms could not be updated');
+  assert.equal(describeRefresh({targets: 0}), 'Nothing to refresh yet — no rooms have been checked.');
+  assert.doesNotMatch(describeRefresh({targets: 4, eth: 0, cache: 4, newest: '12:00'}), /from ETH: [1-9]|freshly/i);
+});

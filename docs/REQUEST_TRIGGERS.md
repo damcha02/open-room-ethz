@@ -20,8 +20,12 @@ or moving between days of a cached week. This table is the complete list; `e2e/r
 | 10 | **Expand a building / narrow search (≤ 5 rooms) / change browse day** (Browse section) | the rooms shown | only rooms without fresh data; the user chose to look |
 | 11 | **Browse refresh button** | the open buildings' rooms and the checked rooms | deliberate, forced |
 | 12 | **Retry after a failure** | only rooms whose request **failed** and whose backoff (30 s, or the server's `Retry-After`) has ended, for rooms the user can currently see | automatic, but never for merely stale data; after a 429/503 the whole queue pauses first |
+| 13 | **Pull-to-refresh / Refresh button** | favorites, then currently recommended, then other checked rooms | ≤ 6 per refresh (shared queue and Durable Object cache; 20 s minimum between refreshes); the version check itself is a static file and makes **0** ETH requests |
 
 ## What does NOT trigger a request
+
+- **Changing a filter** (room type, capacity, equipment, student access, reset): local metadata only, 0 requests. Filters decide which rooms are candidates *before* schedules are requested.
+- Loading `room-metadata.json` and `version.json`: static files, never ETH.
 
 - Switching **Free now / Free soon / Rest of day** (pure recalculation, 0 requests).
 - Starring or un-starring a room, switching campus tabs back and forth to a campus that is already loaded.

@@ -32,7 +32,10 @@ await withStack({}, async s => {
   const csp = home.headers.get('content-security-policy') || '';
   check('static assets carry the security headers from public/_headers (CSP, nosniff, frame deny, referrer policy)', /default-src 'self'/.test(csp) && /frame-ancestors 'none'/.test(csp) && home.headers.get('x-content-type-options') === 'nosniff' && home.headers.get('x-frame-options') === 'DENY' && home.headers.get('referrer-policy') === 'no-referrer', csp);
   const sw = await get(s.base, '/sw.js'), man = await get(s.base, '/manifest.webmanifest');
-  check('service worker and manifest: correct types, revalidated on every load (no long HTTP caching of sw.js)', /javascript/.test(sw.headers.get('content-type')) && /max-age=0/.test(sw.headers.get('cache-control')) && /manifest\+json|json/.test(man.headers.get('content-type')));
+  const ver = await get(s.base, '/version.json'), swv = await get(s.base, '/sw-version.js');
+  check('update-check files are never HTTP-cached: version.json is no-store, sw.js and sw-version.js revalidate; version.json is valid JSON with a 12-hex version', /no-store/.test(ver.headers.get('cache-control')) && /no-cache|max-age=0/.test(swv.headers.get('cache-control')) && /^[0-9a-f]{12}$/.test(JSON.parse(ver.text).version) && swv.text.includes(JSON.parse(ver.text).version));
+  check('/index.html is a redirect to / (hence never precached), and room-metadata.json is served as JSON', (await fetch(s.base + '/index.html', {redirect: 'manual'})).status === 307 && /json/.test((await get(s.base, '/room-metadata.json')).headers.get('content-type')));
+  check('service worker and manifest: correct types, revalidated on every load (no long HTTP caching of sw.js)', /javascript/.test(sw.headers.get('content-type')) && /no-cache|max-age=0/.test(sw.headers.get('cache-control')) && /manifest\+json|json/.test(man.headers.get('content-type')));
   const manifest = JSON.parse(man.text);
   check('manifest: name, short name, scope, standalone, start_url and any + maskable icons', manifest.name === 'Open Room ETHZ' && manifest.short_name === 'Open Room' && manifest.scope === '/' && manifest.start_url === '/' && manifest.display === 'standalone' && manifest.icons.some(i => i.purpose === 'maskable' && i.sizes === '512x512') && manifest.icons.some(i => i.purpose === 'any' && i.sizes === '192x192'));
   let iconsOk = true;
