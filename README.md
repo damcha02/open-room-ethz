@@ -4,7 +4,7 @@
 
 Open Room ETHZ is a mobile-first progressive web app (PWA) that suggests ETH Zürich rooms with **no published reservation** right now, soon, or for the rest of the day, and shows each room's published schedule as a timeline. It reports **reservations, never physical occupancy**: a room that is "Free" here can still be locked, in use or unsuitable.
 
-- **Live app:** {{PRODUCTION_URL}}
+- **Live app:** https://open-room-ethz.danil-poluyanov13.workers.dev
 - **Source:** https://github.com/damcha02/open-room-ethz
 - **ETH logo:** the official ETH Zürich logo is deliberately **not** used (its use needs confirmation under ETH's logo guidelines). The app icon is a custom open-doorway design.
 

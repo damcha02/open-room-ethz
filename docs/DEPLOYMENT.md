@@ -1,6 +1,6 @@
 # Deployment: Open Room ETHZ on Cloudflare Workers Free
 
-Production URL: {{PRODUCTION_URL}}
+Production URL: https://open-room-ethz.danil-poluyanov13.workers.dev
 Repository: https://github.com/damcha02/open-room-ethz
 
 This document describes what is deployed, what it costs (nothing, by design), how to operate it, and what is *not* verified.
@@ -107,3 +107,17 @@ Automated use of ETH Rauminfo has not been explicitly approved by ETH. The endpo
 - **Android (Chrome):** open the URL → menu ⋮ → *Install app*. 
 - Offline: after one online visit the app shell and previously loaded fresh schedules work without a connection; expired schedules are shown as Stale and never recommended.
 - Updates arrive on the next launch; fully closing and reopening the app applies them.
+
+## 9. Abuse and budget exhaustion (known limitation of a public URL)
+
+The URL is public and `/api/allocations` accepts any well-formed room code, so a third party could spend the daily budget by requesting many different (even non-existent) rooms: each unknown room costs one schedule request plus one room check. The effect is **availability, not cost**: ETH never sees more than `ETH_DAILY_BUDGET` requests per UTC day, cached schedules and stored (Stale-marked) schedules keep being served, and nothing is ever shown as free. Possible hardening, not implemented: a separate small daily budget for rooms outside `public/rooms.json`, or restricting access with Cloudflare Access (section 6).
+
+## 10. Verification record (2026-11-17)
+
+- Deployed version `0ad748da-defa-469a-8587-de71cb1dfb35` of commit `a3858e9` with `wrangler deploy` (19 static files, Worker startup 5 ms).
+- Right after a deployment, individual static files can answer 404 for a few seconds while the edge catches up (observed once: `/app.js`, `/timeline.mjs`). The service worker never caches non-2xx responses, so nothing wrong persists.
+- Static files and `/manifest.webmanifest` are served without running the Worker; `/api/*` runs the Worker; security headers and CSP are present on the homepage.
+- Live ETH check through the production API: HG E 27, CHN C 14 and HCI D 2 returned verified schedules (23, 27 and 38 entries; types 2, 5, 8 and 13 seen), a repeat request was a cache hit keeping the original `fetchedAt`, invalid input and POST never reached ETH. 8 upstream requests were used that day (3 manual + 5 from one real first visit in a browser).
+- Real-browser check of the production origin (headless Chromium, 375 px): HTTPS secure context, service worker active and controlling with scope `/`, one versioned cache and no `/api/` entry in it, manifest without errors, **no installability errors**, no console or CSP errors, mode switches and opening a room made 0 API requests. First render about 0.4 s, first recommendation about 0.65 s, homepage TTFB about 0.13 s, 49 KB of static transfer.
+- Offline behavior (app shell from the service worker, cached fresh schedules, Stale handling, no `/api/` caching) was verified against the identical build by stopping the server in the browser tests; it was not repeated against production.
+- Not verified: installation on a physical iPhone or Android phone (only Chromium's installability check and the iOS metadata were verified), the Cloudflare plan (see section 4), Cloudflare Access (section 6).
