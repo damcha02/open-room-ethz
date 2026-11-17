@@ -4,6 +4,13 @@
   "version": "0.1.0",
   "description": "ETH room reservation timetable PWA",
   "type": "module",
-  "engines": {"node": ">=20"},
-  "scripts": {"start": "node server.mjs", "dev": "node server.mjs", "test": "node --test"}
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node --test",
+    "test:e2e": "node e2e/run.mjs"
+  }
 }

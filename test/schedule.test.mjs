@@ -1,6 +1,6 @@
-import test from 'node:test';
+import test,{mock} from 'node:test';
 import assert from 'node:assert/strict';
-import {weekStart,shiftDate,minutes,dayAllocations,freeIntervals,describeStatus,statusFromRecord,zurichParts} from '../public/schedule.mjs';
+import {weekStart,shiftDate,minutes,dayAllocations,freeIntervals,describeStatus,statusFromRecord,zurichParts,sourceAgeMs,isFreshRecord,FRESH_MS} from '../public/schedule.mjs';
 process.env.ETH_MIN_INTERVAL_MS='0'; // no artificial spacing in unit tests (scheduler timing has its own tests)
 import handler,{validDate,validRoom,validLocalTimestamp} from '../api/allocations.js';
 import {_resetForTests} from '../lib/eth-client.js';
@@ -189,7 +189,8 @@ test('cache: a repeated room/week is served from cache without a new ETH request
   assert.equal(a.json.cached,false);assert.equal(b.json.cached,true);
   assert.equal(m.calls.length,1);
   assert.equal(b.json.fetchedAt,a.json.fetchedAt);
-  assert.match(b.headers['Cache-Control'],/s-maxage=600/); // default TTL ≈ 10 minutes
+  assert.match(b.headers['Cache-Control'],/s-maxage=300/); // default server TTL 5 min (< the 10 min freshness limit)
+  assert.match(b.headers['Cache-Control'],/max-age=0/);    // browsers never reuse a response on their own
   await call({...Q,to:'2026-11-07'},{keep:true}); // different window = different key
   assert.equal(m.calls.length,2);
  }finally{m.restore();}
@@ -316,7 +317,8 @@ test('rooms: an invalid room code is rejected before any ETH request',async()=>{
 // ---- Stage 2: frontend status model (pure functions shared with public/app.js) ----
 const DAY='2026-11-04';
 const ctx={day:DAY,today:DAY,now:690,nowMs:1_000_000};
-const rec=(over={})=>({state:'ready',allocations:[],roomVerified:true,fetchedAt:'x',cachedAt:ctx.nowMs-1000,...over});
+const rec=(over={})=>{const {cachedAt,...rest}=over;const r={state:'ready',allocations:[],roomVerified:true,fetchedAt:'x',receivedAt:ctx.nowMs,ageAtReceiptMs:1000,...rest};
+ if('cachedAt' in over){if(cachedAt===undefined){delete r.ageAtReceiptMs;delete r.receivedAt;}else if(cachedAt>ctx.nowMs){r.receivedAt=cachedAt;r.ageAtReceiptMs=0;}else r.ageAtReceiptMs=ctx.nowMs-cachedAt;}return r;};
 test('status: no record → loading; it is never free',()=>{const s=statusFromRecord(undefined,ctx);assert.equal(s.state,'loading');assert.equal(s.free.length,0);});
 test('status: request errors are unknown/unavailable, never free (also when rate limited)',()=>{
  for(const r of [{state:'error',message:'x'},{state:'error',rateLimited:true},{state:'error'},{state:'weird'},{state:'ready',allocations:null,cachedAt:ctx.nowMs}]){
@@ -332,7 +334,7 @@ test('status: empty ETH result for an unverified room is unknown, for a verified
 });
 test('status: booked (type 2) vs blocked (type 8 / 13 / unknown) vs free',()=>{
  const at=(type,v)=>describeStatus([{start:`${DAY}T10:00:00`,end:`${DAY}T12:00:00`,type}],DAY,DAY,v??630);
- assert.equal(at(2).state,'busy');assert.match(at(2).text,/^Reserved until 12:00/);
+ assert.equal(at(2).state,'busy');assert.match(at(2).text,/^Booked until 12:00/);
  for(const t of [8,13,99,null]){assert.equal(at(t).state,'blocked');assert.match(at(t).text,/^Blocked until 12:00/);}
  assert.equal(at(2,780).state,'free');
  const allDay=[{start:`${DAY}T00:00:00`,end:`${DAY}T23:59:00`,type:8}];
@@ -344,4 +346,90 @@ test('status: cached data is shown while stale and discarded when too old',()=>{
  const stale=statusFromRecord(rec({cachedAt:ctx.nowMs-700_000}),ctx);assert.equal(stale.state,'free');assert.equal(stale.stale,true);
  assert.equal(statusFromRecord(rec({cachedAt:ctx.nowMs-4_000_000}),ctx).state,'loading');
  assert.equal(statusFromRecord(rec({cachedAt:ctx.nowMs+5_000}),ctx).state,'loading'); // clock skew: do not trust
+});
+
+// ---- Stage 3A.1: end-to-end freshness (the age of the ORIGINAL ETH answer survives every cache) ----
+test('freshness (server): every response reports ageMs of the original ETH fetch; the server cache never resets it',async()=>{
+ await withEnv({ETH_CACHE_TTL_MS:'3600000'},async()=>{
+  mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-18T09:00:00Z')});
+  const m=mockRouter({alloc:()=>jsonRes(booking)});
+  try{
+   const first=await call(Q);
+   assert.equal(first.json.cached,false);assert.equal(first.json.ageMs,0);
+   assert.equal(first.json.fetchedAt,'2026-11-18T09:00:00.000Z');
+   mock.timers.tick(9*60_000);
+   const second=await call(Q,{keep:true});
+   assert.equal(second.json.cached,true);
+   assert.equal(second.json.fetchedAt,first.json.fetchedAt,'the original fetch time is kept');
+   assert.equal(second.json.ageMs,9*60_000);
+   mock.timers.tick(3*60_000); // the server may still hold it (TTL 1 h) but it is now older than the freshness limit
+   const third=await call(Q,{keep:true});
+   assert.equal(third.json.ageMs,12*60_000);
+   assert.ok(third.json.ageMs>FRESH_MS,'an old response is reported as old');
+   assert.equal(m.calls.length,1);
+  }finally{m.restore();mock.timers.reset();}
+ });
+});
+test('freshness (server): the default TTL keeps cached answers younger than the browser freshness limit',async()=>{
+ mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-18T09:00:00Z')});
+ const m=mockRouter({alloc:()=>jsonRes(booking)});
+ try{
+  await call(Q);
+  mock.timers.tick(299_000);assert.equal((await call(Q,{keep:true})).json.cached,true);
+  mock.timers.tick(2_000);   const after=await call(Q,{keep:true});
+  assert.equal(after.json.cached,false,'expired at 5 minutes: ETH is asked again');assert.equal(after.json.ageMs,0);assert.equal(m.calls.length,2);
+ }finally{m.restore();mock.timers.reset();}
+});
+test('freshness (server): a room-existence answer never makes an empty schedule look newer',async()=>{
+ mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-18T09:00:00Z')});
+ const m=mockRouter({alloc:()=>jsonRes([]),info:()=>jsonRes(ROOM_INFO('HG E 27'))});
+ try{
+  const a=await call(Q);mock.timers.tick(120_000);const b=await call(Q,{keep:true});
+  assert.equal(a.json.fetchedAt,b.json.fetchedAt);assert.equal(b.json.ageMs,120_000);
+ }finally{m.restore();mock.timers.reset();}
+});
+
+test('freshness (browser): source age = age when received + local time since; re-caching never resets it',()=>{
+ const t0=1_000_000;
+ const record={state:'ready',allocations:[],roomVerified:true,receivedAt:t0,ageAtReceiptMs:4*60_000};
+ assert.equal(sourceAgeMs(record,t0),4*60_000);
+ assert.equal(sourceAgeMs(record,t0+3*60_000),7*60_000);
+ assert.equal(isFreshRecord(record,t0+5*60_000),true);
+ assert.equal(isFreshRecord(record,t0+6*60_000),false,'4 min old at receipt + 6 min locally = 10 min');
+ assert.equal(isFreshRecord(record,t0+6*60_000-1),true);
+ assert.equal(isFreshRecord(record,t0+4*60_000,3*60_000),false,'look-ahead refresh window');
+});
+test('freshness (browser): an OLD ETH response served from a RECENTLY populated browser cache is not current',()=>{
+ const now=5_000_000;
+ const old={state:'ready',allocations:[],roomVerified:true,fetchedAt:'2026-11-18T08:48:00.000Z',receivedAt:now-1000,ageAtReceiptMs:12*60_000}; // received 1 s ago, but ETH answered 12 min ago
+ const st=statusFromRecord(old,{day:'2026-11-18',today:'2026-11-18',now:600,nowMs:now});
+ assert.equal(st.stale,true);assert.equal(st.state,'free');assert.ok(st.ageMs>=12*60_000);
+ assert.equal(isFreshRecord(old,now),false);
+ // the same record seconds before the limit is still current
+ assert.equal(statusFromRecord({...old,ageAtReceiptMs:9*60_000},{day:'2026-11-18',today:'2026-11-18',now:600,nowMs:now}).stale,false);
+});
+test('freshness (browser): records without a usable age, or with a moved clock, are never fresh',()=>{
+ const now=5_000_000;
+ const base={state:'ready',allocations:[],roomVerified:true};
+ for(const record of [{...base},{...base,receivedAt:now},{...base,ageAtReceiptMs:0},{...base,receivedAt:now,ageAtReceiptMs:-5},{...base,receivedAt:now+60_000,ageAtReceiptMs:0},{...base,receivedAt:'x',ageAtReceiptMs:0},{...base,cachedAt:now}]){
+  assert.equal(isFreshRecord(record,now),false,JSON.stringify(record));
+  assert.notEqual(statusFromRecord(record,{day:'2026-11-18',today:'2026-11-18',now:600,nowMs:now}).stale,false);
+ }
+ assert.equal(isFreshRecord({...base,state:'error',receivedAt:now,ageAtReceiptMs:0},now),false);
+});
+test('freshness (browser): data older than one hour is discarded, between 10 and 60 minutes it is shown as stale',()=>{
+ const now=9_000_000;const at=age=>({state:'ready',allocations:[],roomVerified:true,receivedAt:now,ageAtReceiptMs:age});
+ const c={day:'2026-11-18',today:'2026-11-18',now:600,nowMs:now};
+ assert.equal(statusFromRecord(at(30*60_000),c).stale,true);
+ assert.equal(statusFromRecord(at(61*60_000),c).state,'loading');
+});
+
+// ---- Stage 3A.1: wording ----
+test('wording: Free / Booked / Blocked are distinct, and "Reserved"/"Unbooked" are gone from statuses',()=>{
+ const D='2026-11-04';
+ const one=(type,at)=>describeStatus([{start:`${D}T10:00:00`,end:`${D}T12:00:00`,type}],D,D,at,'24',true);
+ assert.match(one(2,630).text,/^Booked until 12:00$/);
+ assert.match(one(8,630).text,/^Blocked until 12:00$/);
+ assert.match(one(2,540).text,/^Free until 10:00$/);
+ for(const text of [one(2,630).text,one(8,630).text,one(2,540).text,statusFromRecord(undefined,{day:D,today:D,now:600}).text,statusFromRecord({state:'error'},{day:D,today:D,now:600}).text])assert.doesNotMatch(text,/Unbooked|Reserved/i);
 });

@@ -3,3 +3,99 @@
 @media(max-width:630px){.app-shell{padding:0 15px 24px}.topbar{height:70px}.intro{padding:28px 2px 25px}.intro h1{font-size:47px;line-height:1.04;letter-spacing:-2px}.intro p{font-size:13px}.campus-tabs{gap:7px;margin-bottom:16px}.campus-tab{padding:13px 10px;border-radius:12px}.tab-title{font-size:12px}.tab-sub{font-size:9px}.controls-panel{padding:17px 13px;border-radius:16px}.date-header h2{font-size:20px}.section-overline{font-size:9px}.day-strip{gap:4px;margin-top:17px;margin-bottom:18px}.day-btn{padding:10px 3px 9px}.day-btn .day-name{font-size:9px}.day-btn .day-number{font-size:17px}.results-area{padding-top:25px}.building-head{padding:13px 12px;gap:10px}.building-avatar{width:35px;height:35px;font-size:11px}.building-title{font-size:14px}.count-pill{font-size:10px;padding:5px 7px}.room-row{padding:12px}.room-status{min-width:90px}.room-details{padding:14px 12px}.time-caption{font-size:10px}footer{align-items:flex-start}.brand-sub{font-size:8px}}
 @media(max-width:390px){.intro h1{font-size:41px}.campus-tab{padding:12px 7px}.tab-title{font-size:11px}.tab-sub{font-size:8px}.count-pill{display:none}.room-main{gap:7px}.room-status{min-width:75px}.status-text{font-size:10px}}
 .status-loading{color:#81908d}.status-loading .status-dot{animation:status-pulse 1.2s ease-in-out infinite}@keyframes status-pulse{0%,100%{opacity:.25}50%{opacity:1}}@media(prefers-reduced-motion:reduce){.status-loading .status-dot{animation:none}}
+
+/* ===== Stage 3A: recommendation-first home ===== */
+:root{--muted:#586b73;--unknown:#5d6f77}
+[hidden]{display:none!important}
+.status-unknown,.status-loading{color:var(--unknown)}
+.room-hint,.detail-caveat,.timeline-labels{color:#667880}
+.topbar{height:64px}
+.brand-name{margin:0;font-size:22px;font-weight:800;letter-spacing:-1.1px;line-height:1}
+.topbar-actions{margin-left:auto;display:flex;gap:8px}
+.icon-button,.refresh-btn{width:44px;height:44px}
+.settings-button{margin-left:0}
+main{padding-top:16px}
+main>section{margin-bottom:26px}
+.campus-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 22px}
+.campus-tab{min-height:48px;padding:12px 10px;text-align:center;font-weight:750;font-size:14px;border-radius:12px}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+.section-head h2{font-size:18px;letter-spacing:-.4px;margin:0}
+.date-header h3,.results-topline h3{font-size:19px;letter-spacing:-.5px;margin:6px 0 4px}
+.results-area{padding-top:22px}
+.time-caption{padding-top:0}
+
+/* favorites */
+#favorites-list{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.fav-entry+.fav-entry{border-top:1px solid #edf0ed}
+.fav-row{display:flex;align-items:center;min-height:56px;padding:2px 2px 2px 14px}
+.fav-main{flex:1;min-width:0;min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:transparent;border:0;padding:0;color:inherit;text-align:left}
+.fav-entry .room-details{border-top:1px solid var(--line)}
+
+/* modes */
+.mode-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;background:#e6ece9;border-radius:12px}
+.mode-btn{min-height:44px;border:0;border-radius:9px;background:transparent;color:#42565e;font-weight:700;font-size:13px;padding:0 4px}
+.mode-btn.selected{background:#fff;color:var(--ink);font-weight:800;box-shadow:0 1px 3px #10252f26,inset 0 -2px 0 var(--green)}
+.mode-help{margin:10px 2px 12px;color:var(--muted);font-size:12px;line-height:1.45}
+
+/* recommendation cards */
+.rec-card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.rec-row{display:flex;align-items:center}
+.rec-main{flex:1;min-width:0;min-height:68px;display:flex;align-items:center;gap:14px;padding:12px 4px 12px 14px;background:transparent;border:0;text-align:left;color:inherit}
+.rec-id{display:flex;flex-direction:column;gap:2px;min-width:74px;flex-shrink:0}
+.rec-code{font-size:17px;font-weight:800;letter-spacing:-.3px;color:var(--ink)}
+.rec-building{font-size:11px;color:var(--muted)}
+.rec-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rec-headline{display:flex;align-items:center;gap:7px;color:var(--green);font-weight:800;font-size:13px;line-height:1.3}
+.rec-headline .status-dot{margin-top:1px}
+.rec-detail{color:#4f636b;font-size:12px;line-height:1.35}
+.rec-card .room-details{border-top:1px solid var(--line)}
+.favorite-btn{min-width:48px;min-height:48px;padding:0 2px;font-size:24px;display:grid;place-items:center;color:#9aa9a4}
+.favorite-btn.saved{color:#c88a14}
+.rec-empty{background:var(--panel);border:1px dashed #cdd9d3;border-radius:14px;padding:22px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.55}
+.link-button{display:block;margin:2px auto 0;min-height:44px;padding:0 18px;background:none;border:0;color:#2b6652;font-weight:800;font-size:13px}
+.link-button:hover{text-decoration:underline}
+
+/* coverage */
+.coverage{background:#edf2ef;border-radius:12px;padding:14px 16px}
+.coverage[data-kind=rateLimited],.coverage[data-kind=unavailable]{background:var(--amber-bg)}
+.coverage-text{font-size:13px;font-weight:750;color:#2f4943;line-height:1.45}
+.coverage[data-kind=rateLimited] .coverage-text,.coverage[data-kind=unavailable] .coverage-text{color:#7a470d}
+.coverage-detail{margin-top:4px;font-size:12px;color:#53666d;line-height:1.5}
+.coverage-detail:empty{display:none}
+.secondary-button{min-height:44px;padding:0 16px;margin-top:12px;border-radius:10px;border:1px solid #a9bdb3;background:#fff;color:var(--ink);font-weight:750;font-size:13px}
+.secondary-button:hover:not(:disabled){border-color:#6f8f80}
+.coverage-actions:empty{display:none}
+
+/* 44px touch targets in the browse section */
+.small-button{min-height:44px;padding:0 14px}
+.nav-arrow{width:44px;height:44px}
+.add-room-link{min-height:44px;padding:0 8px}
+.check-label{min-height:44px}
+.modal-close{width:44px;height:44px}
+.room-main{min-height:44px}
+.building-head{min-height:64px}
+.day-btn{min-height:56px}
+
+@media(max-width:630px){
+  .app-shell{padding:0 16px 24px}
+  .topbar{height:60px}
+  main{padding-top:12px}
+  .campus-tab{font-size:13px}
+  .rec-main{gap:10px;padding-left:12px}
+  .rec-id{min-width:68px}
+  .rec-code{font-size:16px}
+  .date-actions{gap:2px}
+  .small-button{margin-right:2px;padding:0 10px}
+  .controls-panel{padding:16px 12px}
+}
+@media(max-width:360px){.mode-btn{font-size:12px}.rec-id{min-width:62px}}
+
+/* 7 day buttons must each stay >= 44 px wide on a 375 px phone */
+@media(max-width:630px){.controls-panel{padding:14px 8px}.day-strip{grid-template-columns:repeat(7,minmax(44px,1fr));gap:2px;overflow-x:auto}}
+@media(max-width:400px){.app-shell{padding:0 12px 24px}.day-strip{gap:1px}}
+
+/* Stage 3A.1: stable layout while schedules load */
+#recommendations{min-height:132px}
+#favorites-section .coverage-actions{margin-top:0}
+#favorites-section .secondary-button{margin-top:10px}
+.rec-empty{min-height:96px;display:flex;align-items:center;justify-content:center}

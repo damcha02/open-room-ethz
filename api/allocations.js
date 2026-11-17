@@ -109,11 +109,18 @@ function parseAllocations(text) {
   return result;
 }
 
+/** Every response states how old the ORIGINAL ETH answer is (`ageMs`, measured on the server clock so it is immune to
+ * wrong client clocks). Caching must never make data look younger: `fetchedAt` is the original ETH fetch time. */
+function serve(body, cached) {
+  const fetched = Date.parse(body.fetchedAt);
+  return {...body, cached, ageMs: Number.isFinite(fetched) ? Math.max(0, Date.now() - fetched) : null};
+}
+
 /** Cached + de-duplicated allocations for one room/week. Only successful results are cached; errors never are. */
 export async function getAllocations(room, from, to) {
   const key = `alloc|${room}|${from}|${to}`;
   const hit = cacheGet(key);
-  if (hit) return {...hit, cached: true};
+  if (hit) return serve(hit, true);
   return dedupe(key, async () => {
     const response = await ethGet({path: `/rooms/${room}/allocations`, from, to});
     if (!/json/i.test(response.headers.get('content-type') || '')) throw new UpstreamError(502, 'ETH did not return JSON');
@@ -123,7 +130,7 @@ export async function getAllocations(room, from, to) {
     const body = {room, from, to, allocations, roomVerified, source: 'ETH Rauminfo', fetchedAt: new Date().toISOString()};
     const cfg = config();
     cacheSet(key, body, roomVerified === null ? cfg.unverifiedTtlMs : cfg.cacheTtlMs);
-    return {...body, cached: false};
+    return serve(body, false);
   });
 }
 
@@ -139,8 +146,10 @@ export default async function handler(req, res) {
   try {
     const body = await getAllocations(room, from, to);
     const cfg = config();
+    // max-age=0: browsers never reuse a response on their own (the app keeps its own cache that tracks the source age).
+    // s-maxage: a shared cache may hold it for at most the server TTL; clients add the HTTP Age header to `ageMs`.
     const shareable = body.roomVerified === true;
-    const cache = shareable ? `public, max-age=60, s-maxage=${Math.round(cfg.cacheTtlMs / 1000)}` : 'no-store';
+    const cache = shareable ? `public, max-age=0, s-maxage=${Math.round(cfg.cacheTtlMs / 1000)}` : 'no-store';
     return send(res, 200, body, cache);
   } catch (error) {
     if (error instanceof UpstreamError) {

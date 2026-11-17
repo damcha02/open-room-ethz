@@ -82,7 +82,7 @@ export function describeStatus(entries, day, today, now, format='24', verified) 
     if (active.length) {
       const until=Math.max(...active.map(b=>b.end));
       return booked(active)
-        ? {state:'busy',text:`Reserved until ${displayTime(until,format)}`,free,blocks}
+        ? {state:'busy',text:`Booked until ${displayTime(until,format)}`,free,blocks}
         : {state:'blocked',text:`Blocked until ${displayTime(until,format)}`,free,blocks};
     }
     if(now<480 || now>=1320) return {state:'unknown',text:'Outside 08–22 view',free,blocks};
@@ -96,8 +96,24 @@ export function describeStatus(entries, day, today, now, format='24', verified) 
       : {state:'blocked',text:'Blocked all day',free,blocks};
 }
 
-export const FRESH_MS = 600_000;       // data younger than this is not refetched
-export const MAX_STALE_MS = 3_600_000; // older data is discarded; in between it is shown while being refreshed
+export const FRESH_MS = 600_000;       // data younger than this is current
+export const MAX_STALE_MS = 3_600_000; // older data is discarded; in between it is shown as stale while being refreshed
+
+/** Age of the ORIGINAL ETH answer behind a cache record, in ms; NaN when it cannot be established.
+ * The proxy reports `ageMs` (server clock); the browser stores it as `ageAtReceiptMs` together with `receivedAt` and
+ * adds only the time that has passed locally since. Re-caching never makes data look younger, and a wrong client clock
+ * cannot distort the age. Records without this information (or with a clock that moved backwards) have no usable age. */
+export function sourceAgeMs(record, nowMs = Date.now()) {
+  if (!record || !Number.isFinite(record.ageAtReceiptMs) || record.ageAtReceiptMs < 0 || !Number.isFinite(record.receivedAt)) return NaN;
+  const local = nowMs - record.receivedAt;
+  return local >= 0 ? record.ageAtReceiptMs + local : NaN;
+}
+/** Fresh = successful record whose source age is under FRESH_MS (minus `aheadMs` for look-ahead refreshes). */
+export function isFreshRecord(record, nowMs = Date.now(), aheadMs = 0) {
+  if (!record || record.state !== 'ready') return false;
+  const age = sourceAgeMs(record, nowMs);
+  return Number.isFinite(age) && age < FRESH_MS - aheadMs;
+}
 
 /** Status from a cache record: undefined -> loading, {state:'error'} -> unknown, {state:'ready'} -> describeStatus. */
 export function statusFromRecord(record, {day, today, now, format='24', nowMs=Date.now()}) {
@@ -106,7 +122,42 @@ export function statusFromRecord(record, {day, today, now, format='24', nowMs=Da
     return {state:'unknown',text:record.rateLimited?'Rate limited — retrying later':'Schedule unavailable',message:record.message,blocks:[],free:[]};
   }
   if (record.state!=='ready' || !Array.isArray(record.allocations)) return {state:'unknown',text:'Schedule unavailable',blocks:[],free:[]};
-  const age=nowMs-record.cachedAt;
-  if (!(age>=0) || age>=MAX_STALE_MS) return {state:'loading',text:'Checking…',blocks:[],free:[]};
-  return {...describeStatus(record.allocations,day,today,now,format,record.roomVerified),fetchedAt:record.fetchedAt,stale:age>=FRESH_MS};
+  const age=sourceAgeMs(record,nowMs);
+  if (!Number.isFinite(age) || age>=MAX_STALE_MS) return {state:'loading',text:'Checking…',blocks:[],free:[]};
+  return {...describeStatus(record.allocations,day,today,now,format,record.roomVerified),fetchedAt:record.fetchedAt,stale:age>=FRESH_MS,ageMs:age};
+}
+
+// ---- Daylight-saving-safe elapsed time (Europe/Zurich) ----
+// ETH publishes wall-clock times. Comparing wall-clock minutes is fine for ordering, but the *length* of a span that
+// contains a DST transition differs from the wall-clock difference (23 h / 25 h days). These helpers convert a Zurich
+// wall-clock date+minute into a real instant so durations are right.
+const zurichFull = new Intl.DateTimeFormat('en-GB', {
+  timeZone:'Europe/Zurich', year:'numeric', month:'2-digit', day:'2-digit',
+  hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'
+});
+export function zurichOffsetMinutes(ms) {
+  const v = Object.fromEntries(zurichFull.formatToParts(new Date(ms)).filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
+  return Math.round((Date.UTC(v.year, v.month-1, v.day, v.hour, v.minute, v.second) - Math.floor(ms/1000)*1000) / 60000);
+}
+/** Real instant (epoch ms) of a Zurich wall-clock `date` (YYYY-MM-DD) + `minute` of day (0..1440).
+ * Ambiguous times (autumn repeat hour) resolve to the first occurrence; non-existent times (spring gap) resolve to the
+ * transition instant itself, which keeps the mapping monotonic. */
+export function wallToInstant(date, minute) {
+  const [y, mo, d] = date.split('-').map(Number);
+  const naive = Date.UTC(y, mo-1, d, 0, minute);
+  const offsets = [...new Set([zurichOffsetMinutes(naive - 12*3600000), zurichOffsetMinutes(naive + 12*3600000)])];
+  const valid = offsets.map(o => naive - o*60000).filter(t => zurichOffsetMinutes(t) === (naive - t) / 60000).sort((a,b) => a-b);
+  if (valid.length) return valid[0];
+  // Gap (spring forward): the wall time does not exist. Collapse it to the transition instant, which keeps the mapping monotonic.
+  let lo = naive - 12*3600000, hi = naive + 12*3600000;
+  const before = zurichOffsetMinutes(lo);
+  while (hi - lo > 60000) {
+    const mid = Math.floor((lo + hi) / 2 / 60000) * 60000;
+    if (zurichOffsetMinutes(mid) === before) lo = mid; else hi = mid;
+  }
+  return hi;
+}
+/** Real minutes between two wall-clock minutes of the same Zurich date. */
+export function elapsedMinutes(date, fromMinute, toMinute) {
+  return Math.round((wallToInstant(date, toMinute) - wallToInstant(date, fromMinute)) / 60000);
 }
